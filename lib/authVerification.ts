@@ -9,7 +9,7 @@ export type PendingVerification = {
 
 const STORAGE_KEY = 'ruehl:pending-verification';
 const LAST_SENT_KEY = 'ruehl:pending-verification-last-sent';
-export const VERIFICATION_RESEND_SECONDS = 30;
+export const VERIFICATION_RESEND_SECONDS = 60;
 
 export function savePendingVerification(payload: PendingVerification) {
   if (typeof window === 'undefined') return;
