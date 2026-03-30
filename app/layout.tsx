@@ -6,7 +6,7 @@ import './globals.css';
 import BottomNav from '@/components/BottomNav';
 import { supabase } from '@/lib/supabase';
 
-const PUBLIC_PATHS = new Set(['/login', '/reset-password', '/verify-account']);
+const PUBLIC_PATHS = new Set(['/login', '/admin/login', '/reset-password', '/verify-account']);
 
 export default function RootLayout({
   children,
@@ -39,7 +39,13 @@ export default function RootLayout({
         setIsVerified(false);
         setAuthChecked(true);
 
-        if (!isPublicPage) router.replace('/login');
+        if (!isPublicPage) {
+          if ((pathname || '').startsWith('/admin')) {
+            router.replace('/admin/login');
+          } else {
+            router.replace('/login');
+          }
+        }
         return;
       }
 
@@ -80,7 +86,13 @@ export default function RootLayout({
 
       if (!authed) {
         setIsVerified(false);
-        if (!PUBLIC_PATHS.has(pathname || '')) router.replace('/login');
+        if (!PUBLIC_PATHS.has(pathname || '')) {
+          if ((pathname || '').startsWith('/admin')) {
+            router.replace('/admin/login');
+          } else {
+            router.replace('/login');
+          }
+        }
         return;
       }
 
