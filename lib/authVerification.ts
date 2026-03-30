@@ -66,10 +66,12 @@ export async function sendVerificationCode(pending: PendingVerification) {
       ...(emailRedirectTo ? { options: { emailRedirectTo } } : {}),
     });
 
-    if (!error) {
-      markVerificationCodeSent();
-      return;
+    if (error) {
+      throw error;
     }
+
+    markVerificationCodeSent();
+    return;
   }
 
   if (pending.method === 'phone') {
