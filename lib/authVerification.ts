@@ -57,6 +57,20 @@ export function getVerificationCooldownSeconds(now = Date.now()) {
 
 export async function sendVerificationCode(pending: PendingVerification) {
   const emailRedirectTo = getAuthRedirectUrl('/verify-account');
+  const authApi = supabase.auth as any;
+
+  if (pending.method === 'email' && typeof authApi.resend === 'function') {
+    const { error } = await authApi.resend({
+      type: 'signup',
+      email: pending.value,
+      ...(emailRedirectTo ? { options: { emailRedirectTo } } : {}),
+    });
+
+    if (!error) {
+      markVerificationCodeSent();
+      return;
+    }
+  }
 
   if (pending.method === 'phone') {
     const { error } = await supabase.auth.signInWithOtp({
