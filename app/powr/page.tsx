@@ -34,7 +34,7 @@ type PowrPostRow = {
   profiles: {
     username: string
     avatar_url: string | null
-  }
+  }[] | null
 }
 
 type ScoredPowrPost = PowrPost & { score: number }
@@ -113,8 +113,13 @@ export default function PowrFeedPage() {
           .select('*', { count: 'exact', head: true })
           .eq('powr_id', post.id)
 
+        const profile = Array.isArray(post.profiles) && post.profiles.length > 0
+          ? post.profiles[0]
+          : { username: 'user', avatar_url: null }
+
         return {
           ...post,
+          profiles: profile,
           likes: likes || 0,
           replies: replies || 0,
         }

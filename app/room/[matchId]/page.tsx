@@ -62,7 +62,7 @@ export default function RoomPage() {
           filter: `match_id=eq.${matchId}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new])
+          setMessages((prev) => [...prev, payload.new as RoomMessage])
         }
       )
       .subscribe()
@@ -118,24 +118,24 @@ export default function RoomPage() {
   }, [])
 
   const sendMessage = async () => {
-  if (!input.trim()) return
+    if (!input.trim() || !user || !matchId) return
 
-  await supabase.from('session_messages').insert({
-    match_id: matchId,
-    sender_id: user.id,
-    content: input,
-  })
+    await supabase.from('session_messages').insert({
+      match_id: matchId,
+      sender_id: user.id,
+      content: input,
+    })
 
-  // UPDATE STREAK
-  await supabase.rpc('update_streak', {
-    user_id_input: user.id,
-  })
+    // Update streak only for authenticated users sending a message.
+    await supabase.rpc('update_streak', {
+      user_id_input: user.id,
+    })
 
-  setInput('')
-}
+    setInput('')
+  }
 
   const proposeSession = async () => {
-    if (!bookingTime) return
+    if (!bookingTime || !user || !matchId) return
 
     await supabase.from('booked_sessions').insert({
       match_id: matchId,
@@ -147,6 +147,8 @@ export default function RoomPage() {
   }
 
   const respondBooking = async (accept: boolean) => {
+    if (!booking || !matchId) return
+
     await supabase
       .from('booked_sessions')
       .update({ status: accept ? 'confirmed' : 'declined' })
@@ -155,10 +157,12 @@ export default function RoomPage() {
     init()
   }
 
-  const completeSession = async () => { await supabase.rpc('update_streak', {
-  user_id_input: user.id,
-})
-    if (!booking) return
+  const completeSession = async () => {
+    if (!booking || !user || !matchId) return
+
+    await supabase.rpc('update_streak', {
+      user_id_input: user.id,
+    })
 
     await supabase
       .from('booked_sessions')
@@ -185,7 +189,8 @@ export default function RoomPage() {
     return profiles.find(p => p.id === id)
   }
 
-  const otherProfile = getProfile(getOtherUser())
+  const otherUserId = getOtherUser()
+  const otherProfile = otherUserId ? getProfile(otherUserId) : null
 
   return (
     <div className="max-w-2xl mx-auto h-screen flex flex-col">

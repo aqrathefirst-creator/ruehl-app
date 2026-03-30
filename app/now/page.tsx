@@ -153,7 +153,7 @@ export default function NowFeedPage() {
   };
 
   const addComment = async () => {
-    if (!newComment || !activeCommentsPost) return;
+    if (!newComment || !activeCommentsPost || !user) return;
 
     await supabase.from('comments').insert({
       content: newComment,

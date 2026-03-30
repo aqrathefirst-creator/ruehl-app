@@ -4,8 +4,10 @@ export default function VerificationBadge() {
       className="w-5 h-5 inline-block ml-1 text-blue-500"
       viewBox="0 0 24 24"
       fill="currentColor"
-      title="Verified"
+      role="img"
+      aria-label="Verified"
     >
+      <title>Verified</title>
       <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
     </svg>
   );

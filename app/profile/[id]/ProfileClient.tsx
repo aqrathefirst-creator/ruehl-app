@@ -86,6 +86,8 @@ export default function ProfileClient({ userId }: { userId: string }) {
   ).length;
 
   const handleFollow = async () => {
+    if (!currentUser) return;
+
     const { data } = await supabase
       .from('follows')
       .insert({
@@ -99,6 +101,8 @@ export default function ProfileClient({ userId }: { userId: string }) {
   };
 
   const handleUnfollow = async () => {
+    if (!currentUser) return;
+
     await supabase
       .from('follows')
       .delete()

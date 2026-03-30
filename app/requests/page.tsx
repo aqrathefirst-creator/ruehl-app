@@ -112,7 +112,7 @@ export default function RequestsPage() {
       )}
 
       {requests.map(r => {
-        const requesterId = r.requester_id || r.sender_id
+        const requesterId = r.requester_id || r.sender_id || ''
         const p = getProfile(requesterId)
 
         return (
