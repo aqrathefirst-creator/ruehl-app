@@ -4,7 +4,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { savePendingVerification } from '@/lib/authVerification';
+import {
+  markVerificationCodeSent,
+  savePendingVerification,
+} from '@/lib/authVerification';
 
 type AuthMode = 'signin' | 'signup';
 type SignupMethod = 'email' | 'mobile';
@@ -277,6 +280,7 @@ export default function LoginPage() {
           : (signupIdentifier.trim().startsWith('+') ? signupIdentifier.trim() : `+${signupIdentifier.trim()}`),
         username: username.trim(),
       });
+      markVerificationCodeSent();
 
       setMessage('Account created. Enter the verification code we sent you.');
       router.replace('/verify-account');

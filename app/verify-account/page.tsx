@@ -5,12 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import {
   clearPendingVerification,
+  getVerificationCooldownSeconds,
   loadPendingVerification,
   savePendingVerification,
+  sendVerificationCode,
   type PendingVerification,
+  VERIFICATION_RESEND_SECONDS,
 } from '@/lib/authVerification';
-
-const RESEND_SECONDS = 30;
 
 function maskVerificationTarget(value: string, method: PendingVerification['method']) {
   if (method === 'phone') {
@@ -29,7 +30,7 @@ export default function VerifyAccountPage() {
 
   const [pending, setPending] = useState<PendingVerification | null>(null);
   const [code, setCode] = useState('');
-  const [cooldown, setCooldown] = useState(RESEND_SECONDS);
+  const [cooldown, setCooldown] = useState(VERIFICATION_RESEND_SECONDS);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +42,7 @@ export default function VerifyAccountPage() {
       const stored = loadPendingVerification();
       if (stored && active) {
         setPending(stored);
+        setCooldown(getVerificationCooldownSeconds());
         return;
       }
 
@@ -50,7 +52,10 @@ export default function VerifyAccountPage() {
       if ((methodParam === 'email' || methodParam === 'phone') && valueParam) {
         const nextPending = { method: methodParam, value: valueParam } as PendingVerification;
         savePendingVerification(nextPending);
-        if (active) setPending(nextPending);
+        if (active) {
+          setPending(nextPending);
+          setCooldown(getVerificationCooldownSeconds());
+        }
         return;
       }
 
@@ -68,6 +73,7 @@ export default function VerifyAccountPage() {
       if (derived) {
         savePendingVerification(derived);
         setPending(derived);
+        setCooldown(getVerificationCooldownSeconds());
       }
     };
 
@@ -77,6 +83,33 @@ export default function VerifyAccountPage() {
       active = false;
     };
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!pending) return;
+    if (getVerificationCooldownSeconds() > 0) return;
+
+    let canceled = false;
+
+    const autoSend = async () => {
+      try {
+        await sendVerificationCode(pending);
+        if (!canceled) {
+          setCooldown(VERIFICATION_RESEND_SECONDS);
+          setMessage('A fresh verification code has been sent.');
+        }
+      } catch {
+        if (!canceled) {
+          setError('We could not auto-send a new code. Use resend below.');
+        }
+      }
+    };
+
+    void autoSend();
+
+    return () => {
+      canceled = true;
+    };
+  }, [pending]);
 
   useEffect(() => {
     if (cooldown <= 0) return undefined;
@@ -163,32 +196,8 @@ export default function VerifyAccountPage() {
     setLoading(true);
 
     try {
-      const authApi = supabase.auth as any;
-
-      if (typeof authApi.resend === 'function') {
-        const resendPayload = pending.method === 'email'
-          ? { type: 'signup', email: pending.value }
-          : { type: 'sms', phone: pending.value };
-
-        const { error: resendError } = await authApi.resend(resendPayload);
-        if (resendError) throw resendError;
-      } else if (pending.method === 'phone') {
-        const { error: resendError } = await supabase.auth.signInWithOtp({
-          phone: pending.value,
-          options: { shouldCreateUser: false },
-        });
-
-        if (resendError) throw resendError;
-      } else {
-        const { error: resendError } = await supabase.auth.signInWithOtp({
-          email: pending.value,
-          options: { shouldCreateUser: false },
-        });
-
-        if (resendError) throw resendError;
-      }
-
-      setCooldown(RESEND_SECONDS);
+      await sendVerificationCode(pending);
+      setCooldown(VERIFICATION_RESEND_SECONDS);
       setMessage('A new verification code has been sent.');
     } catch (resendError: unknown) {
       if (resendError instanceof Error) {

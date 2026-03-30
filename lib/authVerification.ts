@@ -1,3 +1,5 @@
+import { supabase } from '@/lib/supabase';
+
 export type PendingVerification = {
   method: 'email' | 'phone';
   value: string;
@@ -5,6 +7,8 @@ export type PendingVerification = {
 };
 
 const STORAGE_KEY = 'ruehl:pending-verification';
+const LAST_SENT_KEY = 'ruehl:pending-verification-last-sent';
+export const VERIFICATION_RESEND_SECONDS = 30;
 
 export function savePendingVerification(payload: PendingVerification) {
   if (typeof window === 'undefined') return;
@@ -29,4 +33,57 @@ export function loadPendingVerification(): PendingVerification | null {
 export function clearPendingVerification() {
   if (typeof window === 'undefined') return;
   window.sessionStorage.removeItem(STORAGE_KEY);
+  window.sessionStorage.removeItem(LAST_SENT_KEY);
+}
+
+export function markVerificationCodeSent(at = Date.now()) {
+  if (typeof window === 'undefined') return;
+  window.sessionStorage.setItem(LAST_SENT_KEY, String(at));
+}
+
+export function getVerificationCooldownSeconds(now = Date.now()) {
+  if (typeof window === 'undefined') return 0;
+
+  const raw = window.sessionStorage.getItem(LAST_SENT_KEY);
+  if (!raw) return 0;
+
+  const lastSent = Number(raw);
+  if (!Number.isFinite(lastSent) || lastSent <= 0) return 0;
+
+  const elapsedSeconds = Math.floor((now - lastSent) / 1000);
+  return Math.max(VERIFICATION_RESEND_SECONDS - elapsedSeconds, 0);
+}
+
+export async function sendVerificationCode(pending: PendingVerification) {
+  const authApi = supabase.auth as any;
+
+  if (typeof authApi.resend === 'function') {
+    const payload = pending.method === 'email'
+      ? { type: 'signup', email: pending.value }
+      : { type: 'sms', phone: pending.value };
+
+    const { error } = await authApi.resend(payload);
+    if (error) throw error;
+    markVerificationCodeSent();
+    return;
+  }
+
+  if (pending.method === 'phone') {
+    const { error } = await supabase.auth.signInWithOtp({
+      phone: pending.value,
+      options: { shouldCreateUser: false },
+    });
+
+    if (error) throw error;
+    markVerificationCodeSent();
+    return;
+  }
+
+  const { error } = await supabase.auth.signInWithOtp({
+    email: pending.value,
+    options: { shouldCreateUser: false },
+  });
+
+  if (error) throw error;
+  markVerificationCodeSent();
 }
