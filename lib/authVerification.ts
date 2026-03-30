@@ -55,19 +55,6 @@ export function getVerificationCooldownSeconds(now = Date.now()) {
 }
 
 export async function sendVerificationCode(pending: PendingVerification) {
-  const authApi = supabase.auth as any;
-
-  if (typeof authApi.resend === 'function') {
-    const payload = pending.method === 'email'
-      ? { type: 'signup', email: pending.value }
-      : { type: 'sms', phone: pending.value };
-
-    const { error } = await authApi.resend(payload);
-    if (error) throw error;
-    markVerificationCodeSent();
-    return;
-  }
-
   if (pending.method === 'phone') {
     const { error } = await supabase.auth.signInWithOtp({
       phone: pending.value,

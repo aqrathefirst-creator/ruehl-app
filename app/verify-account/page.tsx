@@ -163,14 +163,23 @@ export default function VerifyAccountPage() {
 
     try {
       const authApi = supabase.auth as any;
-      const payload = pending.method === 'email'
-        ? { email: pending.value, token: code.trim(), type: 'signup' }
-        : { phone: pending.value, token: code.trim(), type: 'sms' };
+      if (pending.method === 'email') {
+        const emailPayload = { email: pending.value, token: code.trim(), type: 'email' as const };
+        const { error: emailVerifyError } = await authApi.verifyOtp(emailPayload);
 
-      const { error: verifyError } = await authApi.verifyOtp(payload);
-
-      if (verifyError) {
-        throw verifyError;
+        if (emailVerifyError) {
+          const signupPayload = { email: pending.value, token: code.trim(), type: 'signup' as const };
+          const { error: signupVerifyError } = await authApi.verifyOtp(signupPayload);
+          if (signupVerifyError) {
+            throw signupVerifyError;
+          }
+        }
+      } else {
+        const phonePayload = { phone: pending.value, token: code.trim(), type: 'sms' as const };
+        const { error: phoneVerifyError } = await authApi.verifyOtp(phonePayload);
+        if (phoneVerifyError) {
+          throw phoneVerifyError;
+        }
       }
 
       await markProfileVerified();
