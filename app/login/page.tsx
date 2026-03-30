@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getAuthRedirectUrl } from '@/lib/authRedirect';
 import {
-  markVerificationCodeSent,
   savePendingVerification,
   sendVerificationCode,
 } from '@/lib/authVerification';
@@ -285,17 +284,12 @@ export default function LoginPage() {
         username: username.trim(),
       });
 
-      if (signupMethod === 'email') {
-        // Email signup already triggers Supabase confirmation delivery.
-        markVerificationCodeSent();
-      } else {
-        await sendVerificationCode({
-          method: 'phone',
-          value: signupIdentifier.trim().startsWith('+')
-            ? signupIdentifier.trim()
-            : `+${signupIdentifier.trim()}`,
-        });
-      }
+      await sendVerificationCode({
+        method: signupMethod === 'email' ? 'email' : 'phone',
+        value: signupMethod === 'email'
+          ? signupIdentifier.trim().toLowerCase()
+          : (signupIdentifier.trim().startsWith('+') ? signupIdentifier.trim() : `+${signupIdentifier.trim()}`),
+      });
 
       setMessage('Account created. Enter the verification code we sent you.');
       router.replace('/verify-account');

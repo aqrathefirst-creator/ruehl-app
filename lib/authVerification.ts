@@ -59,7 +59,11 @@ export async function sendVerificationCode(pending: PendingVerification) {
   const emailRedirectTo = getAuthRedirectUrl('/verify-account');
   const authApi = supabase.auth as any;
 
-  if (pending.method === 'email' && typeof authApi.resend === 'function') {
+  if (pending.method === 'email') {
+    if (typeof authApi.resend !== 'function') {
+      throw new Error('Email verification resend is unavailable. Please refresh and try again.');
+    }
+
     const { error } = await authApi.resend({
       type: 'signup',
       email: pending.value,
@@ -85,14 +89,5 @@ export async function sendVerificationCode(pending: PendingVerification) {
     return;
   }
 
-  const { error } = await supabase.auth.signInWithOtp({
-    email: pending.value,
-    options: {
-      shouldCreateUser: false,
-      emailRedirectTo,
-    },
-  });
-
-  if (error) throw error;
-  markVerificationCodeSent();
+  throw new Error('Unsupported verification method.');
 }
