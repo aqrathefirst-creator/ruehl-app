@@ -23,7 +23,6 @@ export default function LoginPage() {
   const [signupIdentifier, setSignupIdentifier] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
 
-  const [resetValue, setResetValue] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
   const [mfaChallengeId, setMfaChallengeId] = useState<string | null>(null);
@@ -201,45 +200,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleForgotPassword = async () => {
-    resetFeedback();
-
-    if (!resetValue.trim()) {
-      setError('Enter your email or mobile number to reset.');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const value = resetValue.trim();
-
-      if (value.includes('@')) {
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(value, {
-          redirectTo: `${window.location.origin}/login`,
-        });
-
-        if (resetError) throw resetError;
-
-        setMessage('Password reset email sent.');
-      } else {
-        const normalized = value.startsWith('+') ? value : `+${value}`;
-        const { error: otpError } = await supabase.auth.signInWithOtp({
-          phone: normalized,
-          options: { shouldCreateUser: false },
-        });
-
-        if (otpError) throw otpError;
-
-        setMessage('Reset OTP sent to your mobile number.');
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Unable to reset password.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSignUp = async () => {
     resetFeedback();
 
@@ -306,16 +266,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    resetFeedback();
-    setLoading(true);
-    const { error: oauthError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-    });
-    if (oauthError) setError(oauthError.message);
-    setLoading(false);
-  };
-
   return (
     <div className="flex justify-center min-h-screen bg-black">
       <div className="w-full max-w-[430px] flex flex-col justify-center px-6 py-10 text-white">
@@ -346,6 +296,19 @@ export default function LoginPage() {
                 className="w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2.5 text-sm placeholder:text-gray-500"
               />
 
+              <div className="text-center -mt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetFeedback();
+                    router.push('/reset-password');
+                  }}
+                  className="text-sm text-gray-400 hover:text-white"
+                >
+                  Forgot password?
+                </button>
+              </div>
+
               {awaitingTwoFactor && (
                 <input
                   value={otpCode}
@@ -355,53 +318,23 @@ export default function LoginPage() {
                 />
               )}
 
-              <div className="space-y-2 rounded-xl bg-white/5 border border-white/10 p-3">
-                <div className="text-xs font-medium text-gray-400">Forgot password?</div>
-                <input
-                  value={resetValue}
-                  onChange={(e) => setResetValue(e.target.value)}
-                  placeholder="Email address or mobile number"
-                  className="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-xs placeholder:text-gray-500"
-                />
+              {awaitingTwoFactor ? (
                 <button
-                  onClick={handleForgotPassword}
+                  onClick={handleVerifyTwoFactor}
                   disabled={loading}
-                  className="w-full py-2 rounded-lg bg-white/10 border border-white/20 text-sm"
+                  className="w-full rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 py-2.5 text-sm font-semibold disabled:opacity-50"
                 >
-                  Reset Password
+                  {loading ? 'Please wait...' : 'Verify OTP'}
                 </button>
-
-                {awaitingTwoFactor ? (
-                  <button
-                    onClick={handleVerifyTwoFactor}
-                    disabled={loading}
-                    className="w-full rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 py-2.5 text-sm font-semibold disabled:opacity-50"
-                  >
-                    {loading ? 'Please wait...' : 'Verify OTP'}
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleSignIn}
-                    disabled={loading}
-                    className="w-full rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 py-2.5 text-sm font-semibold disabled:opacity-50"
-                  >
-                    {loading ? 'Please wait...' : 'Sign In'}
-                  </button>
-                )}
-              </div>
-
-              <div className="relative py-1">
-                <div className="h-px bg-white/10" />
-                <span className="absolute left-1/2 -translate-x-1/2 -top-2.5 px-2 bg-[#101010] text-xs text-gray-500">or</span>
-              </div>
-
-              <button
-                onClick={handleGoogleLogin}
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white text-black font-semibold"
-              >
-                Continue with Google
-              </button>
+              ) : (
+                <button
+                  onClick={handleSignIn}
+                  disabled={loading}
+                  className="w-full rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 py-2.5 text-sm font-semibold disabled:opacity-50"
+                >
+                  {loading ? 'Please wait...' : 'Sign In'}
+                </button>
+              )}
 
               <div className="text-center text-sm text-gray-400 pt-1">
                 <button
