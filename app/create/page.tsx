@@ -116,11 +116,16 @@ export default function CreatePage() {
   const [cameraDenied, setCameraDenied] = useState(false);
   const [micDenied, setMicDenied] = useState(false);
   const [cameraFacing, setCameraFacing] = useState<FacingMode>('environment');
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [zoomRange, setZoomRange] = useState({ min: 1, max: 1 });
+  const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
+  const [lastGalleryThumbnail, setLastGalleryThumbnail] = useState<string | null>(null);
 
   const [recording, setRecording] = useState(false);
   const [recordingProgress, setRecordingProgress] = useState(0);
   const [clipSegments, setClipSegments] = useState<number[]>([]);
   const [totalRecordedMs, setTotalRecordedMs] = useState(0);
+  const [liveClipMs, setLiveClipMs] = useState(0);
 
   const [videoDuration, setVideoDuration] = useState(0);
   const [trimStartSec, setTrimStartSec] = useState(0);
@@ -161,6 +166,7 @@ export default function CreatePage() {
   const galleryUrlsRef = useRef<string[]>([]);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const microphoneAllowedRef = useRef(false);
+  const pinchRef = useRef<{ distance: number; zoom: number } | null>(null);
 
   const dragStateRef = useRef<{
     id: string;
@@ -248,6 +254,7 @@ export default function CreatePage() {
 
     const tick = () => {
       const liveSegmentMs = activeClipStartRef.current ? performance.now() - activeClipStartRef.current : 0;
+      setLiveClipMs(liveSegmentMs);
       const next = Math.min((totalRecordedMs + liveSegmentMs) / RECORDING_MAX_MS, 1);
       setRecordingProgress(next);
 
@@ -262,14 +269,81 @@ export default function CreatePage() {
     progressRafRef.current = requestAnimationFrame(tick);
   };
 
+  const applyZoomLevel = async (nextZoom: number) => {
+    const track = cameraStreamRef.current?.getVideoTracks()?.[0];
+    if (!track) return;
+
+    const safeZoom = Math.max(zoomRange.min, Math.min(zoomRange.max, nextZoom));
+    const capabilities = typeof track.getCapabilities === 'function' ? (track.getCapabilities() as MediaTrackCapabilities & { zoom?: { min?: number; max?: number } | number }) : null;
+
+    try {
+      if (capabilities && 'zoom' in capabilities) {
+        await track.applyConstraints({ advanced: [{ zoom: safeZoom } as unknown as MediaTrackConstraintSet] });
+      }
+      setZoomLevel(safeZoom);
+    } catch {
+      setZoomLevel(safeZoom);
+    }
+  };
+
+  const configureVideoTrack = async (stream: MediaStream) => {
+    const track = stream.getVideoTracks()[0];
+    if (!track) return;
+
+    const capabilities = typeof track.getCapabilities === 'function'
+      ? (track.getCapabilities() as MediaTrackCapabilities & {
+          zoom?: { min?: number; max?: number } | number;
+          focusMode?: string[];
+        })
+      : null;
+
+    const nextMinZoom = capabilities && 'zoom' in capabilities && typeof capabilities.zoom === 'object'
+      ? capabilities.zoom?.min || 1
+      : 1;
+    const nextMaxZoom = capabilities && 'zoom' in capabilities && typeof capabilities.zoom === 'object'
+      ? capabilities.zoom?.max || 1
+      : 1;
+
+    setZoomRange({ min: nextMinZoom, max: nextMaxZoom });
+    setZoomLevel(nextMinZoom);
+
+    const advancedConstraints: MediaTrackConstraintSet[] = [];
+
+    if (capabilities?.focusMode?.includes('continuous')) {
+      advancedConstraints.push({ focusMode: 'continuous' as unknown as ConstrainDOMString } as unknown as MediaTrackConstraintSet);
+    }
+
+    if (nextMaxZoom > nextMinZoom) {
+      advancedConstraints.push({ zoom: nextMinZoom } as MediaTrackConstraintSet);
+    }
+
+    if (advancedConstraints.length > 0) {
+      await track.applyConstraints({ advanced: advancedConstraints }).catch(() => undefined);
+    }
+  };
+
   const startCameraStream = async (facing: FacingMode, withAudio: boolean) => {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: facing },
-      audio: withAudio,
+      video: {
+        facingMode: facing,
+        width: { ideal: 1080 },
+        height: { ideal: 1920 },
+        aspectRatio: { ideal: 9 / 16 },
+        frameRate: { ideal: 30, max: 30 },
+      },
+      audio: withAudio
+        ? {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1,
+          }
+        : false,
     });
 
     stopCameraStream();
     cameraStreamRef.current = stream;
+    await configureVideoTrack(stream).catch(() => undefined);
 
     if (cameraVideoRef.current) {
       cameraVideoRef.current.srcObject = stream;
@@ -300,7 +374,14 @@ export default function CreatePage() {
     }
 
     try {
-      const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        },
+      });
       micStream.getTracks().forEach((track) => track.stop());
       microphoneAllowedRef.current = true;
       setMicDenied(false);
@@ -344,6 +425,48 @@ export default function CreatePage() {
       setScrubSec(0);
       setCoverTimeSec(0);
     }
+  };
+
+  const handlePreviewTap = async (event: React.PointerEvent<HTMLDivElement>) => {
+    if (view !== 'camera' || cameraDenied || requestingPermissions) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
+    setFocusPoint({ x, y });
+
+    window.setTimeout(() => {
+      setFocusPoint(null);
+    }, 900);
+
+    const track = cameraStreamRef.current?.getVideoTracks()?.[0];
+    const capabilities = track && typeof track.getCapabilities === 'function'
+      ? (track.getCapabilities() as MediaTrackCapabilities & { focusMode?: string[] })
+      : null;
+
+    if (track && capabilities?.focusMode?.includes('single-shot')) {
+      await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' as unknown as ConstrainDOMString } as unknown as MediaTrackConstraintSet] }).catch(() => undefined);
+    }
+  };
+
+  const handlePreviewTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length !== 2 || zoomRange.max <= zoomRange.min) return;
+
+    const [first, second] = Array.from(event.touches);
+    const distance = Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+
+    if (!pinchRef.current) {
+      pinchRef.current = { distance, zoom: zoomLevel };
+      return;
+    }
+
+    const scale = distance / pinchRef.current.distance;
+    const nextZoom = pinchRef.current.zoom * scale;
+    void applyZoomLevel(nextZoom);
+  };
+
+  const handlePreviewTouchEnd = () => {
+    pinchRef.current = null;
   };
 
   const loadSounds = async () => {
@@ -548,6 +671,7 @@ export default function CreatePage() {
 
     activeClipStartRef.current = null;
     setRecording(false);
+    setLiveClipMs(0);
     if (navigator.vibrate) navigator.vibrate(10);
     updateRecordingProgress();
   };
@@ -641,6 +765,7 @@ export default function CreatePage() {
 
   const openGallery = () => {
     clearError();
+    setView('gallery');
     galleryInputRef.current?.click();
   };
 
@@ -668,6 +793,7 @@ export default function CreatePage() {
     }
 
     setGalleryItems(nextItems);
+    setLastGalleryThumbnail(nextItems[0]?.url || null);
     setView('gallery');
   };
 
@@ -1151,13 +1277,28 @@ export default function CreatePage() {
 
             {!cameraUnavailable && !requestingPermissions && (
               <>
-                <video
-                  ref={cameraVideoRef}
-                  className="absolute inset-0 h-full w-full object-cover"
-                  autoPlay
-                  playsInline
-                  muted={micDenied}
-                />
+                <div
+                  className="absolute inset-0"
+                  onPointerDown={handlePreviewTap}
+                  onTouchMove={handlePreviewTouchMove}
+                  onTouchEnd={handlePreviewTouchEnd}
+                >
+                  <video
+                    ref={cameraVideoRef}
+                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-150"
+                    autoPlay
+                    playsInline
+                    muted={micDenied}
+                    style={{ transform: zoomRange.max <= zoomRange.min ? `scale(${zoomLevel})` : 'scale(1)' }}
+                  />
+
+                  {focusPoint && (
+                    <div
+                      className="absolute w-16 h-16 rounded-full border border-white/80 shadow-[0_0_30px_rgba(255,255,255,0.2)] -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                      style={{ left: `${focusPoint.x}%`, top: `${focusPoint.y}%` }}
+                    />
+                  )}
+                </div>
 
                 <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/60" />
 
@@ -1165,7 +1306,7 @@ export default function CreatePage() {
                   <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-100"
-                      style={{ width: `${Math.min((totalRecordedMs / RECORDING_MAX_MS) * 100 + (recording ? ((performance.now() - (activeClipStartRef.current || performance.now())) / RECORDING_MAX_MS) * 100 : 0), 100)}%` }}
+                      style={{ width: `${Math.min(((totalRecordedMs + liveClipMs) / RECORDING_MAX_MS) * 100, 100)}%` }}
                     />
                   </div>
 
@@ -1192,20 +1333,22 @@ export default function CreatePage() {
                   </div>
                 )}
 
-                <div className="absolute bottom-10 left-0 right-0 z-30 flex items-center justify-center gap-4">
-                  {clipSegments.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void finalizeRecordedVideo();
-                      }}
-                      className="px-3 py-1.5 rounded-full bg-white/15 border border-white/20 text-xs"
-                    >
-                      Next
-                    </button>
-                  )}
+                <div className="absolute bottom-10 left-0 right-0 z-30 h-24">
+                  <button
+                    type="button"
+                    onClick={openGallery}
+                    className="absolute left-6 bottom-3 w-14 h-14 rounded-[18px] overflow-hidden border border-white/20 bg-white/10 shadow-lg"
+                  >
+                    {lastGalleryThumbnail ? (
+                      <img src={lastGalleryThumbnail} alt="Recent gallery item" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-white/20 to-white/5 flex items-center justify-center text-[10px] uppercase tracking-wide">
+                        Open
+                      </div>
+                    )}
+                  </button>
 
-                  <div className={`relative h-24 w-24 ${recording ? 'drop-shadow-[0_0_16px_rgba(236,72,153,0.65)]' : ''}`}>
+                  <div className={`absolute left-1/2 -translate-x-1/2 bottom-0 relative h-24 w-24 ${recording ? 'drop-shadow-[0_0_16px_rgba(236,72,153,0.65)]' : ''}`}>
                     <svg className="absolute inset-0 h-24 w-24 -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
                       <circle cx="40" cy="40" r={progressCircle.radius} stroke="rgba(255,255,255,0.28)" strokeWidth="5" fill="none" />
                       <circle
@@ -1241,13 +1384,17 @@ export default function CreatePage() {
                     />
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={openGallery}
-                    className="px-3 py-1.5 rounded-full bg-white/15 border border-white/20 text-xs"
-                  >
-                    Gallery
-                  </button>
+                  {clipSegments.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void finalizeRecordedVideo();
+                      }}
+                      className="absolute right-6 bottom-3 px-4 py-3 rounded-full bg-white/15 border border-white/20 text-xs"
+                    >
+                      Next
+                    </button>
+                  )}
                 </div>
               </>
             )}

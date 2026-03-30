@@ -22,13 +22,38 @@ type Post = {
   user_id: string;
 };
 
+async function withAuthFetch(path: string, options: RequestInit = {}) {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+
+  if (!token) throw new Error('Missing auth session');
+
+  const headers = new Headers(options.headers);
+  headers.set('Authorization', `Bearer ${token}`);
+  headers.set('Content-Type', 'application/json');
+
+  const response = await fetch(path, {
+    ...options,
+    headers,
+  });
+
+  const json = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(json.error || 'Request failed');
+  }
+
+  return json;
+}
+
 export default function Page() {
   const params = useParams();
-  const userId = params?.id as string;
+  const routeId = params?.id as string;
 
   const router = useRouter();
 
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [resolvedProfileId, setResolvedProfileId] = useState(routeId);
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [comments, setComments] = useState<any[]>([]);
@@ -65,6 +90,10 @@ export default function Page() {
   const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null);
 
   const [showCreateMenu, setShowCreateMenu] = useState(false); // ✅ ADDED
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [actionBusy, setActionBusy] = useState(false);
 
   const [activity] = useState({
     last: 'Strength Training',
@@ -72,15 +101,35 @@ export default function Page() {
     focus: ['Fitness', 'Discipline'],
   });
 
+  const profileUrl = `https://ruehl.app/profile/${profile?.username || routeId}`;
+
   const fetchData = async () => {
     const { data: userData } = await supabase.auth.getUser();
     setCurrentUser(userData.user);
 
-    const { data: profileData } = await supabase
+    let { data: profileData } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', userId)
-      .single();
+      .eq('id', routeId)
+      .maybeSingle();
+
+    if (!profileData) {
+      const fallbackProfile = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('username', routeId)
+        .maybeSingle();
+
+      profileData = fallbackProfile.data;
+    }
+
+    if (!profileData?.id) {
+      setProfile(null);
+      return;
+    }
+
+    const targetProfileId = profileData.id;
+    setResolvedProfileId(targetProfileId);
 
     const { data: allProfilesData } = await supabase
       .from('profiles')
@@ -89,7 +138,7 @@ export default function Page() {
     const { data: postsData } = await supabase
       .from('posts')
       .select('*')
-      .eq('user_id', userId);
+      .eq('user_id', targetProfileId);
 
     const { data: commentsData } = await supabase.from('comments').select('*');
     const { data: likesData } = await supabase.from('likes').select('*');
@@ -97,17 +146,17 @@ export default function Page() {
     const { data: followersData } = await supabase
       .from('follows')
       .select('*')
-      .eq('following_id', userId);
+      .eq('following_id', targetProfileId);
 
     const { data: followingData } = await supabase
       .from('follows')
       .select('*')
-      .eq('follower_id', userId);
+      .eq('follower_id', targetProfileId);
 
     const { data: powrData } = await supabase
       .from('posts')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', targetProfileId)
       .is('media_url', null)
       .order('created_at', { ascending: false });
 
@@ -127,8 +176,8 @@ export default function Page() {
         .from('follows')
         .select('*')
         .eq('follower_id', userData.user.id)
-        .eq('following_id', userId)
-        .single();
+        .eq('following_id', targetProfileId)
+        .maybeSingle();
 
       setIsFollowing(!!followData);
     }
@@ -159,7 +208,7 @@ export default function Page() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [routeId]);
 
   useEffect(() => {
     return () => {
@@ -274,7 +323,7 @@ export default function Page() {
   };
 
   const shareGridPost = async (postId: string) => {
-    const postUrl = `${window.location.origin}/profile/${userId}?post=${postId}`;
+    const postUrl = `${profileUrl}?post=${postId}`;
 
     if (navigator.share) {
       try {
@@ -411,7 +460,7 @@ export default function Page() {
   };
 
   const uploadAvatarFile = async (file: File, previewUrl?: string) => {
-    if (!currentUser || currentUser.id !== userId) return;
+    if (!currentUser || currentUser.id !== resolvedProfileId) return;
 
     if (previewUrl) {
       setLocalAvatarPreview(prev => {
@@ -481,7 +530,7 @@ export default function Page() {
     event.target.value = '';
 
     if (!file) return;
-    if (!currentUser || currentUser.id !== userId) return;
+    if (!currentUser || currentUser.id !== resolvedProfileId) return;
 
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file.');
@@ -530,28 +579,94 @@ export default function Page() {
   };
 
   const toggleFollow = async () => {
-    if (!currentUser || currentUser.id === userId) return;
+    if (!currentUser || currentUser.id === resolvedProfileId) return;
 
     setLoadingFollow(true);
 
-    if (isFollowing) {
-      await supabase
-        .from('follows')
-        .delete()
-        .eq('follower_id', currentUser.id)
-        .eq('following_id', userId);
+    try {
+      if (isFollowing) {
+        await withAuthFetch(`/api/follows?following_id=${encodeURIComponent(resolvedProfileId)}`, {
+          method: 'DELETE',
+        });
+        setIsFollowing(false);
+      } else {
+        await withAuthFetch('/api/follows', {
+          method: 'POST',
+          body: JSON.stringify({ following_id: resolvedProfileId }),
+        });
+        setIsFollowing(true);
+      }
 
-      setIsFollowing(false);
-    } else {
-      await supabase.from('follows').insert({
-        follower_id: currentUser.id,
-        following_id: userId,
-      });
-
-      setIsFollowing(true);
+      await fetchData();
+    } catch (followError) {
+      console.error(followError);
     }
 
     setLoadingFollow(false);
+  };
+
+  const shareProfile = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `@${profile?.username || 'RUEHL profile'}`,
+          url: profileUrl,
+        });
+        return;
+      } catch {
+        // Fall through to clipboard.
+      }
+    }
+
+    await navigator.clipboard.writeText(profileUrl);
+  };
+
+  const copyProfileUrl = async () => {
+    await navigator.clipboard.writeText(profileUrl);
+  };
+
+  const blockProfile = async () => {
+    if (!resolvedProfileId || currentUser?.id === resolvedProfileId) return;
+
+    setActionBusy(true);
+
+    try {
+      await withAuthFetch('/api/blocks', {
+        method: 'POST',
+        body: JSON.stringify({ blocked_id: resolvedProfileId }),
+      });
+
+      setShowProfileMenu(false);
+      router.replace('/');
+    } catch (blockError) {
+      console.error(blockError);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const submitReport = async () => {
+    if (!resolvedProfileId || !reportReason.trim()) return;
+
+    setActionBusy(true);
+
+    try {
+      await withAuthFetch('/api/reports', {
+        method: 'POST',
+        body: JSON.stringify({
+          target_user_id: resolvedProfileId,
+          reason: reportReason.trim(),
+        }),
+      });
+
+      setReportReason('');
+      setShowReportModal(false);
+      setShowProfileMenu(false);
+    } catch (reportError) {
+      console.error(reportError);
+    } finally {
+      setActionBusy(false);
+    }
   };
 
   const gridPosts = useMemo(
@@ -579,7 +694,7 @@ export default function Page() {
 
           {/* TOP ACTION BUTTONS */}
           <div className="flex justify-end gap-3 mb-6">
-            {currentUser?.id === userId && (
+            {currentUser?.id === resolvedProfileId && (
               <>
                 <button
                   onClick={() => router.push('/settings')}
@@ -587,11 +702,14 @@ export default function Page() {
                 >
                   ⚙️
                 </button>
-                <button className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors active:bg-white/30">
-                  ↗️
-                </button>
               </>
             )}
+            <button
+              onClick={() => setShowProfileMenu(true)}
+              className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors active:bg-white/30"
+            >
+              ⋯
+            </button>
           </div>
 
           {/* PROFILE INFO */}
@@ -600,7 +718,7 @@ export default function Page() {
             <div className="relative">
               <label
                 className={`block w-24 h-24 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 p-1 flex-shrink-0 ${
-                  currentUser?.id === userId ? 'cursor-pointer' : ''
+                  currentUser?.id === resolvedProfileId ? 'cursor-pointer' : ''
                 }`}
               >
                 {profile.avatar_url ? (
@@ -609,7 +727,7 @@ export default function Page() {
                       src={localAvatarPreview || profile.avatar_url}
                       className="w-full h-full object-cover"
                     />
-                    {currentUser?.id === userId && (
+                    {currentUser?.id === resolvedProfileId && (
                       <div className="absolute inset-0 bg-black/0 hover:bg-black/35 active:bg-black/45 transition-colors" />
                     )}
                     {avatarUploading && (
@@ -626,7 +744,7 @@ export default function Page() {
                         className="w-full h-full object-cover rounded-full"
                       />
                     )}
-                    {currentUser?.id === userId && (
+                    {currentUser?.id === resolvedProfileId && (
                       <div className="absolute inset-0 bg-black/0 hover:bg-black/35 active:bg-black/45 transition-colors rounded-full" />
                     )}
                     {avatarUploading && (
@@ -636,7 +754,7 @@ export default function Page() {
                     )}
                   </div>
                 )}
-                {currentUser?.id === userId && (
+                {currentUser?.id === resolvedProfileId && (
                   <input
                     type="file"
                     accept="image/*"
@@ -646,12 +764,12 @@ export default function Page() {
                   />
                 )}
               </label>
-              {currentUser?.id === userId && (
+              {currentUser?.id === resolvedProfileId && (
                 <div className="text-[10px] text-center text-gray-500 mt-1">
                   {avatarUploading ? 'Saving...' : 'Tap to change'}
                 </div>
               )}
-              {currentUser?.id === userId && avatarUploadError && retryAvatarFile && !avatarUploading && (
+              {currentUser?.id === resolvedProfileId && avatarUploadError && retryAvatarFile && !avatarUploading && (
                 <button
                   onClick={async () => {
                     const preview = localAvatarPreview || URL.createObjectURL(retryAvatarFile);
@@ -683,14 +801,14 @@ export default function Page() {
               <div className="text-xs text-gray-500 uppercase tracking-wide mt-1">Posts</div>
             </div>
             <button
-              onClick={() => router.push(`/followers/${userId}`)}
+              onClick={() => router.push(`/followers/${resolvedProfileId}`)}
               className="text-left active:opacity-80 transition-opacity"
             >
               <div className="text-3xl font-black">{followers.length}</div>
               <div className="text-xs text-gray-500 uppercase tracking-wide mt-1">Followers</div>
             </button>
             <button
-              onClick={() => router.push(`/following/${userId}`)}
+              onClick={() => router.push(`/following/${resolvedProfileId}`)}
               className="text-left active:opacity-80 transition-opacity"
             >
               <div className="text-3xl font-black">{following.length}</div>
@@ -717,13 +835,23 @@ export default function Page() {
 
           {/* ACTION BUTTONS */}
           <div className="flex gap-2 mt-6 justify-center">
-            <button className="px-6 py-2 rounded-full bg-white/10 hover:bg-white/20 active:bg-white/30 text-sm transition-colors touch-highlight-trasparent">
-              Edit Profile
-            </button>
-            <button className="px-6 py-2 rounded-full bg-white/10 hover:bg-white/20 active:bg-white/30 text-sm transition-colors">
+            {currentUser?.id === resolvedProfileId ? (
+              <button onClick={() => router.push('/edit-profile')} className="px-6 py-2 rounded-full bg-white/10 hover:bg-white/20 active:bg-white/30 text-sm transition-colors touch-highlight-trasparent">
+                Edit Profile
+              </button>
+            ) : (
+              <button
+                onClick={toggleFollow}
+                disabled={loadingFollow}
+                className="px-6 py-2 rounded-full bg-white/10 hover:bg-white/20 active:bg-white/30 text-sm transition-colors disabled:opacity-60"
+              >
+                {loadingFollow ? 'Please wait...' : isFollowing ? 'Following' : 'Follow'}
+              </button>
+            )}
+            <button onClick={shareProfile} className="px-6 py-2 rounded-full bg-white/10 hover:bg-white/20 active:bg-white/30 text-sm transition-colors">
               Share Profile
             </button>
-            {currentUser?.id === userId && (
+            {currentUser?.id === resolvedProfileId && (
               <button
                 onClick={() => setShowCreateMenu(!showCreateMenu)}
                 className="px-6 py-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-semibold hover:shadow-lg active:shadow-md transition-all relative"
@@ -811,6 +939,41 @@ export default function Page() {
                   </div>
                 </button>
               ))}
+            </div>
+          </div>
+        )}
+
+        {showProfileMenu && (
+          <div className="fixed inset-0 bg-black/65 z-50 flex items-end justify-center p-4" onClick={() => setShowProfileMenu(false)}>
+            <div className="w-full max-w-[380px] rounded-2xl border border-white/10 bg-[#101010] p-3" onClick={(event) => event.stopPropagation()}>
+              <button onClick={shareProfile} className="w-full text-left px-3 py-3 rounded-xl hover:bg-white/10">Share this profile</button>
+              <button onClick={copyProfileUrl} className="w-full text-left px-3 py-3 rounded-xl hover:bg-white/10">Copy URL</button>
+              {currentUser?.id !== resolvedProfileId && (
+                <>
+                  <button onClick={() => setShowReportModal(true)} className="w-full text-left px-3 py-3 rounded-xl hover:bg-white/10">Report</button>
+                  <button disabled={actionBusy} onClick={blockProfile} className="w-full text-left px-3 py-3 rounded-xl text-red-300 hover:bg-red-500/10 disabled:opacity-60">Block</button>
+                </>
+              )}
+              <button onClick={() => setShowProfileMenu(false)} className="w-full text-left px-3 py-3 rounded-xl text-gray-400 hover:bg-white/10">Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {showReportModal && (
+          <div className="fixed inset-0 bg-black/75 z-50 flex items-end justify-center p-4" onClick={() => setShowReportModal(false)}>
+            <div className="w-full max-w-[380px] rounded-2xl border border-white/10 bg-[#101010] p-4" onClick={(event) => event.stopPropagation()}>
+              <div className="text-base font-semibold mb-3">Report Profile</div>
+              <textarea
+                value={reportReason}
+                onChange={(event) => setReportReason(event.target.value)}
+                placeholder="Tell us what happened"
+                rows={4}
+                className="w-full rounded-xl bg-white/10 border border-white/20 p-3 text-sm resize-none"
+              />
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <button onClick={() => setShowReportModal(false)} className="py-2 rounded-xl bg-white/10 border border-white/15">Cancel</button>
+                <button disabled={actionBusy || reportReason.trim().length < 5} onClick={submitReport} className="py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 font-semibold disabled:opacity-50">Submit</button>
+              </div>
             </div>
           </div>
         )}

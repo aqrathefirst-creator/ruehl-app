@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { savePendingVerification } from '@/lib/authVerification';
 
 type AuthMode = 'signin' | 'signup';
 type SignupMethod = 'email' | 'mobile';
@@ -35,6 +36,68 @@ export default function LoginPage() {
   const resetFeedback = () => {
     setMessage(null);
     setError(null);
+  };
+
+  const redirectAfterAuth = async () => {
+    const { data: authData } = await supabase.auth.getUser();
+    const signedInUser = authData.user;
+
+    if (!signedInUser?.id) {
+      router.replace('/');
+      return;
+    }
+
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('two_factor_enabled, is_verified')
+      .eq('id', signedInUser.id)
+      .single();
+
+    if (profileData?.two_factor_enabled) {
+      const mfa = supabase.auth.mfa as any;
+      const { data: factorData, error: factorsError } = await mfa.listFactors();
+
+      if (factorsError) {
+        setError(factorsError.message || 'Unable to start 2FA challenge.');
+        return;
+      }
+
+      const factorId = factorData?.totp?.[0]?.id || null;
+
+      if (!factorId) {
+        setError('2FA is enabled but no authenticator factor was found.');
+        return;
+      }
+
+      const { data: challengeData, error: challengeError } = await mfa.challenge({
+        factorId,
+      });
+
+      if (challengeError || !challengeData?.id) {
+        setError(challengeError?.message || 'Unable to create 2FA challenge.');
+        return;
+      }
+
+      setMfaFactorId(factorId);
+      setMfaChallengeId(challengeData.id);
+      setAwaitingTwoFactor(true);
+      setMessage('Enter the OTP from your authenticator app to finish signing in.');
+      return;
+    }
+
+    if (profileData?.is_verified === false) {
+      if (signedInUser.email) {
+        savePendingVerification({ method: 'email', value: signedInUser.email });
+      } else if (signedInUser.phone) {
+        savePendingVerification({ method: 'phone', value: signedInUser.phone });
+      }
+
+      router.replace('/verify-account');
+      return;
+    }
+
+    setMessage('Signed in successfully.');
+    router.replace('/');
   };
 
   const handleSignIn = async () => {
@@ -108,55 +171,7 @@ export default function LoginPage() {
         return;
       }
 
-      const { data: authData } = await supabase.auth.getUser();
-      const signedInUser = authData.user;
-
-      if (signedInUser?.id) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('two_factor_enabled')
-          .eq('id', signedInUser.id)
-          .single();
-
-        if (profileData?.two_factor_enabled) {
-          const mfa = supabase.auth.mfa as any;
-          const { data: factorData, error: factorsError } = await mfa.listFactors();
-
-          if (factorsError) {
-            setError(factorsError.message || 'Unable to start 2FA challenge.');
-            setLoading(false);
-            return;
-          }
-
-          const factorId = factorData?.totp?.[0]?.id || null;
-
-          if (!factorId) {
-            setError('2FA is enabled but no authenticator factor was found.');
-            setLoading(false);
-            return;
-          }
-
-          const { data: challengeData, error: challengeError } = await mfa.challenge({
-            factorId,
-          });
-
-          if (challengeError || !challengeData?.id) {
-            setError(challengeError?.message || 'Unable to create 2FA challenge.');
-            setLoading(false);
-            return;
-          }
-
-          setMfaFactorId(factorId);
-          setMfaChallengeId(challengeData.id);
-          setAwaitingTwoFactor(true);
-          setMessage('Enter the OTP from your authenticator app to finish signing in.');
-          setLoading(false);
-          return;
-        }
-      }
-
-      setMessage('Signed in successfully.');
-      router.replace('/');
+      await redirectAfterAuth();
     } catch (err: any) {
       setError(err?.message || 'Unable to sign in. Please try again.');
     } finally {
@@ -191,8 +206,7 @@ export default function LoginPage() {
       setMfaFactorId(null);
       setMfaChallengeId(null);
       setOtpCode('');
-      setMessage('Signed in successfully.');
-      router.replace('/');
+      await redirectAfterAuth();
     } catch (err: any) {
       setError(err?.message || 'Unable to verify OTP.');
     } finally {
@@ -251,14 +265,21 @@ export default function LoginPage() {
           id: createdUser.id,
           username: username.trim(),
           avatar_url: null,
+          is_verified: false,
+          verified: false,
         });
       }
 
-      setMessage('Account created successfully. Please sign in.');
-      setMode('signin');
-      setIdentifier(signupIdentifier.trim());
-      setPassword('');
-      setSignupPassword('');
+      savePendingVerification({
+        method: signupMethod === 'email' ? 'email' : 'phone',
+        value: signupMethod === 'email'
+          ? signupIdentifier.trim().toLowerCase()
+          : (signupIdentifier.trim().startsWith('+') ? signupIdentifier.trim() : `+${signupIdentifier.trim()}`),
+        username: username.trim(),
+      });
+
+      setMessage('Account created. Enter the verification code we sent you.');
+      router.replace('/verify-account');
     } catch (err: any) {
       setError(err?.message || 'Unable to create account.');
     } finally {

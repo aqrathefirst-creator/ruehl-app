@@ -6,6 +6,8 @@ import './globals.css';
 import BottomNav from '@/components/BottomNav';
 import { supabase } from '@/lib/supabase';
 
+const PUBLIC_PATHS = new Set(['/login', '/reset-password', '/verify-account']);
+
 export default function RootLayout({
   children,
 }: {
@@ -16,13 +18,14 @@ export default function RootLayout({
 
   const [authChecked, setAuthChecked] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
 
-  const isAuthPage = pathname === '/login';
+  const isPublicPage = PUBLIC_PATHS.has(pathname || '');
 
   useEffect(() => {
     let mounted = true;
 
-    const checkSession = async () => {
+    const syncAuth = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -31,13 +34,43 @@ export default function RootLayout({
 
       const authed = !!session;
       setIsAuthenticated(authed);
+
+      if (!authed) {
+        setIsVerified(false);
+        setAuthChecked(true);
+
+        if (!isPublicPage) router.replace('/login');
+        return;
+      }
+
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('is_verified')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
+      if (!mounted) return;
+
+      const verified = error ? true : profileData?.is_verified !== false;
+      setIsVerified(verified);
       setAuthChecked(true);
 
-      if (!authed && !isAuthPage) router.replace('/login');
-      if (authed && isAuthPage) router.replace('/');
+      if (!verified && pathname !== '/verify-account') {
+        router.replace('/verify-account');
+        return;
+      }
+
+      if (verified && pathname === '/verify-account') {
+        router.replace('/');
+        return;
+      }
+
+      if (verified && pathname === '/login') {
+        router.replace('/');
+      }
     };
 
-    checkSession();
+    void syncAuth();
 
     const {
       data: { subscription },
@@ -45,17 +78,22 @@ export default function RootLayout({
       const authed = !!session;
       setIsAuthenticated(authed);
 
-      if (!authed && pathname !== '/login') router.replace('/login');
-      if (authed && pathname === '/login') router.replace('/');
+      if (!authed) {
+        setIsVerified(false);
+        if (!PUBLIC_PATHS.has(pathname || '')) router.replace('/login');
+        return;
+      }
+
+      void syncAuth();
     });
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [isAuthPage, pathname, router]);
+  }, [isPublicPage, pathname, router]);
 
-  const showNav = isAuthenticated && !isAuthPage;
+  const showNav = isAuthenticated && isVerified && !isPublicPage;
 
   return (
     <html lang="en">
