@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { getAuthRedirectUrl } from '@/lib/authRedirect';
 
 export type PendingVerification = {
   method: 'email' | 'phone';
@@ -55,6 +56,8 @@ export function getVerificationCooldownSeconds(now = Date.now()) {
 }
 
 export async function sendVerificationCode(pending: PendingVerification) {
+  const emailRedirectTo = getAuthRedirectUrl('/verify-account');
+
   if (pending.method === 'phone') {
     const { error } = await supabase.auth.signInWithOtp({
       phone: pending.value,
@@ -68,7 +71,10 @@ export async function sendVerificationCode(pending: PendingVerification) {
 
   const { error } = await supabase.auth.signInWithOtp({
     email: pending.value,
-    options: { shouldCreateUser: false },
+    options: {
+      shouldCreateUser: false,
+      emailRedirectTo,
+    },
   });
 
   if (error) throw error;

@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { getAuthRedirectUrl } from '@/lib/authRedirect';
 import {
   savePendingVerification,
   sendVerificationCode,
@@ -230,6 +231,7 @@ export default function LoginPage() {
     try {
       let authError: any = null;
       let createdUser: any = null;
+      const emailRedirectTo = getAuthRedirectUrl('/verify-account');
 
       if (signupMethod === 'email') {
         const { data, error: signUpError } = await supabase.auth.signUp({
@@ -237,6 +239,7 @@ export default function LoginPage() {
           password: signupPassword,
           options: {
             data: { username: username.trim() },
+            ...(emailRedirectTo ? { emailRedirectTo } : {}),
           },
         });
         authError = signUpError;
