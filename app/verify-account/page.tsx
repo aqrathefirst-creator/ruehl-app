@@ -85,33 +85,6 @@ export default function VerifyAccountPage() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!pending) return;
-    if (getVerificationCooldownSeconds() > 0) return;
-
-    let canceled = false;
-
-    const autoSend = async () => {
-      try {
-        await sendVerificationCode(pending);
-        if (!canceled) {
-          setCooldown(VERIFICATION_RESEND_SECONDS);
-          setMessage('A fresh verification code has been sent.');
-        }
-      } catch {
-        if (!canceled) {
-          setError('We could not auto-send a new code. Use resend below.');
-        }
-      }
-    };
-
-    void autoSend();
-
-    return () => {
-      canceled = true;
-    };
-  }, [pending]);
-
-  useEffect(() => {
     if (cooldown <= 0) return undefined;
 
     const timer = window.setTimeout(() => {
