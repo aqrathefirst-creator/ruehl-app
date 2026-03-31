@@ -10,7 +10,13 @@ type ErrorLike = {
 
 function isMissingRelationError(error: ErrorLike | null | undefined) {
   if (!error) return false;
-  return error.code === '42P01' || /relation .* does not exist/i.test(error.message || '');
+  return (
+    error.code === '42P01' ||
+    error.code === 'PGRST205' ||
+    /relation .* does not exist/i.test(error.message || '') ||
+    /schema cache/i.test(error.message || '') ||
+    /could not find the table/i.test(error.message || '')
+  );
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
