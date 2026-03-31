@@ -86,6 +86,7 @@ export default function SettingsPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -258,6 +259,7 @@ export default function SettingsPage() {
       sessionStorage.removeItem('ruehl:pending-verification');
       sessionStorage.removeItem('ruehl:pending-verification-last-sent');
 
+      setShowLogoutConfirm(false);
       router.replace('/login');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to sign out'));
@@ -429,12 +431,42 @@ export default function SettingsPage() {
           <p className="text-sm text-red-100/70">Log out of your account on this device and return to the sign in page.</p>
           <button
             disabled={saving}
-            onClick={logout}
+            onClick={() => setShowLogoutConfirm(true)}
             className="w-full h-11 rounded-full bg-red-500/20 border border-red-400/30 text-sm font-semibold text-red-200 disabled:opacity-50"
           >
             Log out
           </button>
         </section>
+
+        {showLogoutConfirm && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 pb-8 pt-20 sm:items-center">
+            <div className="w-full max-w-[430px] rounded-3xl border border-white/10 bg-[#121212] p-5 shadow-2xl">
+              <h2 className="text-xl font-bold text-white">Confirm logout</h2>
+              <p className="mt-2 text-sm text-gray-400">
+                You will be signed out of this device and sent back to the sign in page.
+              </p>
+
+              <div className="mt-5 flex gap-3">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="flex-1 h-11 rounded-full border border-white/15 bg-white/5 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={logout}
+                  className="flex-1 h-11 rounded-full border border-red-400/30 bg-red-500/20 text-sm font-semibold text-red-200 disabled:opacity-50"
+                >
+                  {saving ? 'Logging out...' : 'Confirm logout'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
