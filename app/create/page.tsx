@@ -165,6 +165,8 @@ export default function CreatePage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const showPortraitGuard = view === 'camera' && isMobileCapture && isLandscapeViewport;
+
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const editorVideoRef = useRef<HTMLVideoElement | null>(null);
   const hiddenFrameVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -1488,33 +1490,31 @@ export default function CreatePage() {
           const requestedTrack = selectedSound?.track_name || trackName;
           const requestedArtist = selectedSound?.artist_name || artistName;
 
-          const { data: existing } = await retry('Sound lookup', () =>
-            supabase
+          const existing = await retry('Sound lookup', async () => {
+            const { data, error } = await supabase
               .from('sounds')
               .select('*')
               .eq('track_name', requestedTrack)
               .eq('artist_name', requestedArtist)
-              .single()
-              .then(({ data, error }) => {
-                if (error && error.code !== 'PGRST116') throw error;
-                return data;
-              })
-          );
+              .single();
+
+            if (error && error.code !== 'PGRST116') throw error;
+            return data;
+          });
 
           if (existing) {
             soundId = existing.id;
-            await retry('Sound update', () =>
-              supabase
+            await retry('Sound update', async () => {
+              const { error } = await supabase
                 .from('sounds')
                 .update({ usage_count: (existing.usage_count || 0) + 1 })
-                .eq('id', existing.id)
-                .then(({ error }) => {
-                  if (error) throw error;
-                })
-            );
+                .eq('id', existing.id);
+
+              if (error) throw error;
+            });
           } else {
-            const createdSound = await retry('Sound create', () =>
-              supabase
+            const createdSound = await retry('Sound create', async () => {
+              const { data, error } = await supabase
                 .from('sounds')
                 .insert({
                   track_name: requestedTrack,
@@ -1523,12 +1523,11 @@ export default function CreatePage() {
                   thumbnail_url: selectedSound?.thumbnail_url || null,
                 })
                 .select()
-                .single()
-                .then(({ data, error }) => {
-                  if (error) throw error;
-                  return data;
-                })
-            );
+                .single();
+
+              if (error) throw error;
+              return data;
+            });
 
             soundId = createdSound?.id || null;
           }
@@ -1576,7 +1575,6 @@ export default function CreatePage() {
   };
 
   const cameraUnavailable = cameraDenied || isPowr;
-  const showPortraitGuard = view === 'camera' && isMobileCapture && isLandscapeViewport;
 
   return (
     <div
