@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 type Settings = {
@@ -68,6 +69,8 @@ async function withAuthFetch(path: string, options: RequestInit = {}) {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
+
   const [settings, setSettings] = useState<Settings | null>(null);
   const [activity, setActivity] = useState<ActivitySummary | null>(null);
   const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
@@ -240,6 +243,28 @@ export default function SettingsPage() {
     }
   };
 
+  const logout = async () => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) throw signOutError;
+
+      localStorage.removeItem('user_id');
+      localStorage.removeItem('ruehl:avatar-url');
+      localStorage.removeItem('optimistic_post');
+      sessionStorage.removeItem('ruehl:pending-verification');
+      sessionStorage.removeItem('ruehl:pending-verification-last-sent');
+
+      router.replace('/login');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to sign out'));
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -397,6 +422,18 @@ export default function SettingsPage() {
           <p className="text-sm text-gray-400">Privacy Policy</p>
           <p className="text-sm text-gray-400">App version: {process.env.NEXT_PUBLIC_APP_VERSION || '0.1.0'}</p>
           <p className="text-sm text-gray-400">Support: support@ruehl.app</p>
+        </section>
+
+        <section className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4 space-y-3">
+          <h2 className="text-lg font-bold text-red-200">Session</h2>
+          <p className="text-sm text-red-100/70">Log out of your account on this device and return to the sign in page.</p>
+          <button
+            disabled={saving}
+            onClick={logout}
+            className="w-full h-11 rounded-full bg-red-500/20 border border-red-400/30 text-sm font-semibold text-red-200 disabled:opacity-50"
+          >
+            Log out
+          </button>
         </section>
       </div>
     </div>
