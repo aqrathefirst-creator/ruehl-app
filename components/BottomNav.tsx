@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Home, Flame, Calendar, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
+import { clearCreateUploadState, subscribeToCreateUpload, type CreateUploadSnapshot } from '@/lib/createUploadQueue';
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -12,6 +13,14 @@ export default function BottomNav() {
   const [userId, setUserId] = useState<string | null>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [uploadSnapshot, setUploadSnapshot] = useState<CreateUploadSnapshot>({
+    active: false,
+    progress: 0,
+    status: '',
+    error: null,
+    itemId: null,
+    updatedAt: Date.now(),
+  });
 
   useEffect(() => {
     let resolvedUserId: string | null = null;
@@ -67,6 +76,8 @@ export default function BottomNav() {
     };
   }, []);
 
+  useEffect(() => subscribeToCreateUpload(setUploadSnapshot), []);
+
   // 🔥 UPDATED TABS (Train removed, Now moved)
   const tabs = [
     { name: 'Home', path: '/', icon: Home },
@@ -77,7 +88,42 @@ export default function BottomNav() {
   const isProfileActive = pathname?.startsWith('/profile');
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-[430px] backdrop-blur-md bg-black/85 border border-white/[0.08] shadow-2xl rounded-2xl z-50 flex items-center justify-between px-6" style={{ height: 72 }}>
+    <>
+      {(uploadSnapshot.active || uploadSnapshot.error) && (
+        <button
+          type="button"
+          onClick={() => {
+            if (uploadSnapshot.error) clearCreateUploadState();
+            else router.push('/now');
+          }}
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 w-[92%] max-w-[430px] z-50 rounded-2xl border border-white/10 bg-black/85 px-4 py-3 text-left shadow-2xl backdrop-blur-md"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-white">
+                {uploadSnapshot.error ? 'Post upload failed' : 'Publishing post'}
+              </div>
+              <div className="text-xs text-white/70">
+                {uploadSnapshot.error || uploadSnapshot.status}
+              </div>
+            </div>
+            <div className="text-xs text-white/80">
+              {uploadSnapshot.error ? 'Dismiss' : `${Math.round(uploadSnapshot.progress)}%`}
+            </div>
+          </div>
+
+          {!uploadSnapshot.error && (
+            <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 transition-all duration-300"
+                style={{ width: `${Math.max(6, uploadSnapshot.progress)}%` }}
+              />
+            </div>
+          )}
+        </button>
+      )}
+
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-[430px] backdrop-blur-md bg-black/85 border border-white/[0.08] shadow-2xl rounded-2xl z-50 flex items-center justify-between px-6" style={{ height: 72 }}>
 
       {/* LEFT SIDE */}
       <div className="flex items-center gap-8">
@@ -186,6 +232,7 @@ export default function BottomNav() {
         </button>
       </div>
 
-    </div>
+      </div>
+    </>
   );
 }

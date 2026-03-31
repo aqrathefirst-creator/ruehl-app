@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase, uploadPostMedia, processMedia } from '@/lib/supabase';
+import { startCreateUpload } from '@/lib/createUploadQueue';
 
 type CreateView = 'camera' | 'gallery' | 'editor';
 type FacingMode = 'user' | 'environment';
@@ -89,6 +90,18 @@ const parseMentions = (caption: string) => {
   return [...new Set(matches.map((mention) => mention.toLowerCase()))];
 };
 
+const isLikelyMobileBrowser = () => {
+  if (typeof window === 'undefined') return false;
+
+  const userAgent = navigator.userAgent || '';
+  const matchesMobileAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(userAgent);
+  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const minScreenSide = Math.min(window.screen.width, window.screen.height, window.innerWidth, window.innerHeight);
+  const mobileSizedViewport = minScreenSide <= 1024;
+
+  return matchesMobileAgent || (hasTouch && mobileSizedViewport);
+};
+
 export default function CreatePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -115,6 +128,8 @@ export default function CreatePage() {
   const [requestingPermissions, setRequestingPermissions] = useState(!isPowr);
   const [cameraDenied, setCameraDenied] = useState(false);
   const [micDenied, setMicDenied] = useState(false);
+  const [isMobileCapture, setIsMobileCapture] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [cameraFacing, setCameraFacing] = useState<FacingMode>('environment');
   const [zoomLevel, setZoomLevel] = useState(1);
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1 });
@@ -151,9 +166,11 @@ export default function CreatePage() {
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const editorVideoRef = useRef<HTMLVideoElement | null>(null);
   const hiddenFrameVideoRef = useRef<HTMLVideoElement | null>(null);
+  const captureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const soundPreviewRef = useRef<HTMLAudioElement | null>(null);
 
   const cameraStreamRef = useRef<MediaStream | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
   const holdTimeoutRef = useRef<number | null>(null);
@@ -162,6 +179,7 @@ export default function CreatePage() {
   const activeClipStartRef = useRef<number | null>(null);
 
   const progressRafRef = useRef<number | null>(null);
+  const previewRenderRafRef = useRef<number | null>(null);
   const selectedMediaUrlRef = useRef<string | null>(null);
   const galleryUrlsRef = useRef<string[]>([]);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -236,10 +254,84 @@ export default function CreatePage() {
     }
   };
 
+  const stopPreviewRenderLoop = () => {
+    if (previewRenderRafRef.current) {
+      cancelAnimationFrame(previewRenderRafRef.current);
+      previewRenderRafRef.current = null;
+    }
+  };
+
+  const stopRecordingStream = () => {
+    if (!recordingStreamRef.current) return;
+    if (recordingStreamRef.current !== cameraStreamRef.current) {
+      recordingStreamRef.current.getTracks().forEach((track) => track.stop());
+    }
+    recordingStreamRef.current = null;
+  };
+
   const stopCameraStream = () => {
+    setCameraReady(false);
+    stopPreviewRenderLoop();
+    stopRecordingStream();
     if (!cameraStreamRef.current) return;
     cameraStreamRef.current.getTracks().forEach((track) => track.stop());
     cameraStreamRef.current = null;
+  };
+
+  const lockPortraitOrientation = async () => {
+    if (!isMobileCapture) return;
+
+    const orientation = (screen as Screen & {
+      orientation?: { lock?: (value: string) => Promise<void> };
+    }).orientation;
+
+    if (!orientation?.lock) return;
+    await orientation.lock('portrait').catch(() => undefined);
+  };
+
+  const renderVideoFrameToCanvas = () => {
+    const video = cameraVideoRef.current;
+    const canvas = captureCanvasRef.current;
+    if (!video || !canvas || !video.videoWidth || !video.videoHeight) return false;
+
+    const targetWidth = isMobileCapture ? 720 : video.videoWidth;
+    const targetHeight = isMobileCapture ? 1280 : video.videoHeight;
+    if (canvas.width !== targetWidth) canvas.width = targetWidth;
+    if (canvas.height !== targetHeight) canvas.height = targetHeight;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return false;
+
+    const sourceAspect = video.videoWidth / video.videoHeight;
+    const targetAspect = targetWidth / targetHeight;
+
+    let sx = 0;
+    let sy = 0;
+    let sw = video.videoWidth;
+    let sh = video.videoHeight;
+
+    if (sourceAspect > targetAspect) {
+      sw = video.videoHeight * targetAspect;
+      sx = (video.videoWidth - sw) / 2;
+    } else if (sourceAspect < targetAspect) {
+      sh = video.videoWidth / targetAspect;
+      sy = (video.videoHeight - sh) / 2;
+    }
+
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight);
+    return true;
+  };
+
+  const startPreviewRenderLoop = () => {
+    stopPreviewRenderLoop();
+    if (!isMobileCapture) return;
+
+    const render = () => {
+      renderVideoFrameToCanvas();
+      previewRenderRafRef.current = requestAnimationFrame(render);
+    };
+
+    previewRenderRafRef.current = requestAnimationFrame(render);
   };
 
   const stopProgressLoop = () => {
@@ -294,6 +386,9 @@ export default function CreatePage() {
       ? (track.getCapabilities() as MediaTrackCapabilities & {
           zoom?: { min?: number; max?: number } | number;
           focusMode?: string[];
+          exposureCompensation?: { min?: number; max?: number } | number;
+          exposureMode?: string[];
+          whiteBalanceMode?: string[];
         })
       : null;
 
@@ -311,6 +406,26 @@ export default function CreatePage() {
 
     if (capabilities?.focusMode?.includes('continuous')) {
       advancedConstraints.push({ focusMode: 'continuous' as unknown as ConstrainDOMString } as unknown as MediaTrackConstraintSet);
+    }
+
+    if (capabilities?.exposureMode?.includes('continuous')) {
+      advancedConstraints.push({ exposureMode: 'continuous' as unknown as ConstrainDOMString } as unknown as MediaTrackConstraintSet);
+    }
+
+    if (capabilities?.whiteBalanceMode?.includes('continuous')) {
+      advancedConstraints.push({ whiteBalanceMode: 'continuous' as unknown as ConstrainDOMString } as unknown as MediaTrackConstraintSet);
+    }
+
+    if (
+      capabilities &&
+      'exposureCompensation' in capabilities &&
+      typeof capabilities.exposureCompensation === 'object'
+    ) {
+      const exposureMin = capabilities.exposureCompensation?.min ?? 0;
+      const exposureMax = capabilities.exposureCompensation?.max ?? 0;
+      advancedConstraints.push({
+        exposureCompensation: (exposureMin + exposureMax) / 2,
+      } as MediaTrackConstraintSet);
     }
 
     if (nextMaxZoom > nextMinZoom) {
@@ -348,9 +463,18 @@ export default function CreatePage() {
     });
 
     await video.play().catch(() => undefined);
+
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      setCameraReady(true);
+      if (isMobileCapture) {
+        startPreviewRenderLoop();
+      }
+    }
   };
 
   const startCameraStream = async (facing: FacingMode, withAudio: boolean) => {
+    setCameraReady(false);
+
     const audioConstraints = withAudio
       ? {
           echoCancellation: true,
@@ -360,13 +484,22 @@ export default function CreatePage() {
         }
       : false;
 
-    const getVideoConstraints = (mode: FacingMode) => ({
-      facingMode: { ideal: mode },
-      width: { ideal: 1080 },
-      height: { ideal: 1920 },
-      aspectRatio: { ideal: 9 / 16 },
-      frameRate: { ideal: 30, max: 30 },
-    });
+    const getVideoConstraints = (mode: FacingMode) =>
+      isMobileCapture
+        ? {
+            facingMode: { ideal: mode },
+            width: { ideal: 1080 },
+            height: { ideal: 1920 },
+            aspectRatio: { ideal: 9 / 16 },
+            resizeMode: 'crop-and-scale' as ConstrainDOMString,
+            frameRate: { ideal: 30, max: 30 },
+          }
+        : {
+            facingMode: { ideal: mode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30, max: 30 },
+          };
 
     let stream: MediaStream;
 
@@ -401,6 +534,7 @@ export default function CreatePage() {
     }
 
     setRequestingPermissions(true);
+    await lockPortraitOrientation();
 
     try {
       await startCameraStream(cameraFacing, false);
@@ -523,26 +657,32 @@ export default function CreatePage() {
   }, []);
 
   useEffect(() => {
-    void initializePermissions();
+    setIsMobileCapture(isLikelyMobileBrowser());
+  }, []);
 
-  // Attach the captured stream to the video element once it mounts.
-  // The <video> is only rendered when !requestingPermissions, so cameraVideoRef is null
-  // during initializePermissions(). This effect runs when the video element becomes available.
+  // Attach the captured stream to the preview element once it mounts.
   useEffect(() => {
     if (requestingPermissions || view !== 'camera') return;
     const stream = cameraStreamRef.current;
     const video = cameraVideoRef.current;
     if (!video || !stream) return;
+
     if (video.srcObject !== stream) {
       void attachStreamToPreview(stream);
+      return;
     }
-  }, [requestingPermissions, view]);
+
+    if (cameraReady && isMobileCapture) {
+      startPreviewRenderLoop();
+    }
+  }, [cameraReady, isMobileCapture, requestingPermissions, view]);
 
   useEffect(() => {
     void initializePermissions();
 
     return () => {
       stopProgressLoop();
+      stopPreviewRenderLoop();
       if (holdTimeoutRef.current) window.clearTimeout(holdTimeoutRef.current);
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
@@ -553,7 +693,19 @@ export default function CreatePage() {
       revokeTrimmedUrl();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isMobileCapture]);
+
+  useEffect(() => {
+    if (view === 'camera') {
+      if (!cameraStreamRef.current && !requestingPermissions && !cameraDenied && !isPowr) {
+        void initializePermissions();
+      }
+      return;
+    }
+
+    stopPreviewRenderLoop();
+    stopCameraStream();
+  }, [cameraDenied, isPowr, requestingPermissions, view]);
 
   useEffect(() => {
     if (!selectedMedia || selectedMedia.kind !== 'video') return;
@@ -629,6 +781,7 @@ export default function CreatePage() {
     }
 
     mediaRecorderRef.current = null;
+    stopRecordingStream();
     recorderChunksRef.current = [];
     activeClipStartRef.current = null;
     setClipSegments([]);
@@ -637,18 +790,42 @@ export default function CreatePage() {
     setRecordingProgress(0);
   };
 
-  const beginRecordingIfNeeded = () => {
-    if (!cameraStreamRef.current) return false;
+  const buildRecordingStream = () => {
+    if (!cameraStreamRef.current) return null;
+    if (!isMobileCapture) return cameraStreamRef.current;
+
+    const canvas = captureCanvasRef.current;
+    if (!canvas || typeof canvas.captureStream !== 'function') {
+      return cameraStreamRef.current;
+    }
+
+    renderVideoFrameToCanvas();
+    const canvasStream = canvas.captureStream(30);
+    const audioTracks = cameraStreamRef.current.getAudioTracks();
+    return new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+  };
+
+  const beginRecordingIfNeeded = async () => {
+    const nextStream = buildRecordingStream();
+    if (!nextStream) return false;
     if (typeof MediaRecorder === 'undefined') {
       setError('Media recording is not available on this device.');
       return false;
     }
 
     if (!mediaRecorderRef.current) {
+      recordingStreamRef.current = nextStream;
       const mimeType = getPreferredRecorderMimeType();
       const recorder = mimeType
-        ? new MediaRecorder(cameraStreamRef.current, { mimeType })
-        : new MediaRecorder(cameraStreamRef.current);
+        ? new MediaRecorder(nextStream, {
+            mimeType,
+            videoBitsPerSecond: isMobileCapture ? 2_500_000 : 4_000_000,
+            audioBitsPerSecond: 128_000,
+          })
+        : new MediaRecorder(nextStream, {
+            videoBitsPerSecond: isMobileCapture ? 2_500_000 : 4_000_000,
+            audioBitsPerSecond: 128_000,
+          });
 
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) recorderChunksRef.current.push(event.data);
@@ -658,6 +835,7 @@ export default function CreatePage() {
         setRecording(false);
         activeClipStartRef.current = null;
         stopProgressLoop();
+        stopRecordingStream();
 
         if (!recorderChunksRef.current.length) return;
 
@@ -681,14 +859,15 @@ export default function CreatePage() {
     return true;
   };
 
-  const startClipRecording = () => {
+  const startClipRecording = async () => {
     if (cameraDenied || requestingPermissions || isPowr) return;
-    if (!beginRecordingIfNeeded()) return;
+    if (!(await beginRecordingIfNeeded())) return;
 
     const recorder = mediaRecorderRef.current;
     if (!recorder) return;
 
     clearError();
+    await lockPortraitOrientation();
 
     if (recorder.state === 'paused') {
       recorder.resume();
@@ -755,22 +934,37 @@ export default function CreatePage() {
 
     const video = cameraVideoRef.current;
 
-    if (!video.videoWidth || !video.videoHeight) {
+    if (!cameraReady || !video.videoWidth || !video.videoHeight) {
       setError('Camera is still loading. Try again.');
       return;
     }
 
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    const canvas = isMobileCapture
+      ? captureCanvasRef.current || document.createElement('canvas')
+      : document.createElement('canvas');
+
+    if (isMobileCapture) {
+      if (!renderVideoFrameToCanvas()) {
+        setError('Camera is still loading. Try again.');
+        return;
+      }
+    } else {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const canvasContext = canvas.getContext('2d');
+      if (!canvasContext) {
+        setError('Unable to capture photo right now.');
+        return;
+      }
+      canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+    }
+
     const ctx = canvas.getContext('2d');
 
     if (!ctx) {
       setError('Unable to capture photo right now.');
       return;
     }
-
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     const blob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob(resolve, 'image/jpeg', 0.95);
@@ -781,6 +975,7 @@ export default function CreatePage() {
       return;
     }
 
+    if (navigator.vibrate) navigator.vibrate(6);
     const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
     setSelectedFromFile(file);
   };
@@ -789,7 +984,7 @@ export default function CreatePage() {
     if (cameraDenied || requestingPermissions || isPowr) return;
 
     holdTimeoutRef.current = window.setTimeout(() => {
-      startClipRecording();
+      void startClipRecording();
       holdTimeoutRef.current = null;
     }, HOLD_TO_RECORD_MS);
   };
@@ -1186,100 +1381,136 @@ export default function CreatePage() {
         return;
       }
 
-      let mediaUrl: string | null = null;
-      let thumbnailUrl: string | null = null;
+      let preparedMediaFile: File | null = null;
+      let preparedCoverFile: File | null = null;
 
       if (selectedMedia) {
-        setProgress(30);
+        setProgress(22);
 
         const fileForUpload = await buildTrimmedVideo(selectedMedia.file);
-        const finalFile = await processMedia(fileForUpload);
-        setProgress(52);
-        mediaUrl = await uploadPostMedia(finalFile, user.id);
+        const finalFile = await processMedia(fileForUpload, {
+          mobileVideo: isMobileCapture,
+          onProgress: (next, message) => {
+            setProgress(Math.max(22, Math.min(58, Math.round(22 + next * 0.36))));
+            if (message) setError(null);
+          },
+        });
+        preparedMediaFile = finalFile;
 
         if (selectedMedia.kind === 'video') {
           const coverFile = await extractCoverFrame(fileForUpload, coverTimeSec || trimStartSec || 0);
           if (coverFile) {
-            const processedCover = await processMedia(coverFile);
-            thumbnailUrl = await uploadPostMedia(processedCover, user.id);
+            preparedCoverFile = await processMedia(coverFile);
           }
         }
       }
-
-      let soundId: string | null = null;
-
-      if (selectedSound || trackName) {
-        const requestedTrack = selectedSound?.track_name || trackName;
-        const requestedArtist = selectedSound?.artist_name || artistName;
-
-        const { data: existing } = await supabase
-          .from('sounds')
-          .select('*')
-          .eq('track_name', requestedTrack)
-          .eq('artist_name', requestedArtist)
-          .single();
-
-        if (existing) {
-          soundId = existing.id;
-          await supabase
-            .from('sounds')
-            .update({ usage_count: (existing.usage_count || 0) + 1 })
-            .eq('id', existing.id);
-        } else {
-          const { data: createdSound } = await supabase
-            .from('sounds')
-            .insert({
-              track_name: requestedTrack,
-              artist_name: requestedArtist,
-              usage_count: 1,
-              thumbnail_url: selectedSound?.thumbnail_url || null,
-            })
-            .select()
-            .single();
-
-          soundId = createdSound?.id || null;
-        }
-      }
-
-      setProgress(78);
+      setProgress(64);
 
       const hashtags = parseHashtags(caption);
       const mentions = parseMentions(caption);
 
-      const payload: Record<string, any> = {
-        content: caption,
-        user_id: user.id,
-        media_url: isPowr ? null : mediaUrl,
-        thumbnail_url: thumbnailUrl,
-        track_name: selectedSound?.track_name || trackName,
-        artist_name: selectedSound?.artist_name || artistName,
-        sound_id: soundId,
-        genre: selectedGenre,
-        hashtags,
-        mentions,
-        filter_name: selectedFilter,
-        text_overlays: textOverlays,
-        trim_start_sec: selectedMedia?.kind === 'video' ? trimStartSec : null,
-        trim_end_sec: selectedMedia?.kind === 'video' ? trimEndSec : null,
-        cover_time_sec: selectedMedia?.kind === 'video' ? coverTimeSec : null,
-        original_audio_volume: selectedMedia?.kind === 'video' ? originalAudioVolume : null,
-        sound_audio_volume: selectedMedia?.kind === 'video' ? addedSoundVolume : null,
-        is_multi_clip: clipSegments.length > 1,
-        clip_segments_ms: clipSegments.length ? clipSegments : null,
-      };
+      startCreateUpload(async ({ setProgress: setBackgroundProgress, retry }) => {
+        let mediaUrl: string | null = null;
+        let thumbnailUrl: string | null = null;
 
-      await insertPostWithFallback(payload);
+        if (preparedMediaFile) {
+          setBackgroundProgress(20, 'Uploading media...');
+          mediaUrl = await retry('Media upload', () => uploadPostMedia(preparedMediaFile as File, user.id));
+        }
+
+        if (preparedCoverFile) {
+          setBackgroundProgress(44, 'Uploading cover frame...');
+          thumbnailUrl = await retry('Cover upload', () => uploadPostMedia(preparedCoverFile as File, user.id));
+        }
+
+        let soundId: string | null = null;
+
+        if (selectedSound || trackName) {
+          setBackgroundProgress(62, 'Syncing sound...');
+          const requestedTrack = selectedSound?.track_name || trackName;
+          const requestedArtist = selectedSound?.artist_name || artistName;
+
+          const { data: existing } = await retry('Sound lookup', () =>
+            supabase
+              .from('sounds')
+              .select('*')
+              .eq('track_name', requestedTrack)
+              .eq('artist_name', requestedArtist)
+              .single()
+              .then(({ data, error }) => {
+                if (error && error.code !== 'PGRST116') throw error;
+                return data;
+              })
+          );
+
+          if (existing) {
+            soundId = existing.id;
+            await retry('Sound update', () =>
+              supabase
+                .from('sounds')
+                .update({ usage_count: (existing.usage_count || 0) + 1 })
+                .eq('id', existing.id)
+                .then(({ error }) => {
+                  if (error) throw error;
+                })
+            );
+          } else {
+            const createdSound = await retry('Sound create', () =>
+              supabase
+                .from('sounds')
+                .insert({
+                  track_name: requestedTrack,
+                  artist_name: requestedArtist,
+                  usage_count: 1,
+                  thumbnail_url: selectedSound?.thumbnail_url || null,
+                })
+                .select()
+                .single()
+                .then(({ data, error }) => {
+                  if (error) throw error;
+                  return data;
+                })
+            );
+
+            soundId = createdSound?.id || null;
+          }
+        }
+
+        setBackgroundProgress(82, 'Publishing post...');
+
+        const payload: Record<string, any> = {
+          content: caption,
+          user_id: user.id,
+          media_url: isPowr ? null : mediaUrl,
+          thumbnail_url: thumbnailUrl,
+          track_name: selectedSound?.track_name || trackName,
+          artist_name: selectedSound?.artist_name || artistName,
+          sound_id: soundId,
+          genre: selectedGenre,
+          hashtags,
+          mentions,
+          filter_name: selectedFilter,
+          text_overlays: textOverlays,
+          trim_start_sec: selectedMedia?.kind === 'video' ? trimStartSec : null,
+          trim_end_sec: selectedMedia?.kind === 'video' ? trimEndSec : null,
+          cover_time_sec: selectedMedia?.kind === 'video' ? coverTimeSec : null,
+          original_audio_volume: selectedMedia?.kind === 'video' ? originalAudioVolume : null,
+          sound_audio_volume: selectedMedia?.kind === 'video' ? addedSoundVolume : null,
+          is_multi_clip: clipSegments.length > 1,
+          clip_segments_ms: clipSegments.length ? clipSegments : null,
+        };
+
+        await retry('Post publish', () => insertPostWithFallback(payload));
+        localStorage.removeItem('optimistic_post');
+      });
 
       setProgress(100);
       setSuccess(true);
-
-      window.setTimeout(() => {
-        localStorage.removeItem('optimistic_post');
-      }, 900);
+      resetVideoSession();
 
       window.setTimeout(() => {
         router.push('/now');
-      }, 820);
+      }, 240);
     } catch (postError: any) {
       setError(postError?.message || 'Unable to publish post right now.');
       setPosting(false);
@@ -1305,6 +1536,7 @@ export default function CreatePage() {
         />
 
         <video ref={hiddenFrameVideoRef} className="hidden" playsInline />
+        <canvas ref={captureCanvasRef} className="hidden" />
 
         {view === 'camera' && (
           <>
@@ -1357,6 +1589,14 @@ export default function CreatePage() {
 
                 <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/60" />
 
+                {!cameraReady && (
+                  <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/35 backdrop-blur-[2px]">
+                    <div className="rounded-2xl border border-white/10 bg-black/60 px-4 py-3 text-center text-sm text-white/90">
+                      Finalizing camera preview...
+                    </div>
+                  </div>
+                )}
+
                 <div className="absolute top-16 left-4 right-4 z-30">
                   <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
                     <div
@@ -1379,8 +1619,16 @@ export default function CreatePage() {
                 </div>
 
                 <div className="absolute bottom-28 left-0 right-0 z-30 text-center text-xs text-white/80">
-                  Tap photo. Hold to record clips. Swipe up for gallery.
+                  {isMobileCapture
+                    ? 'Tap photo. Hold to record vertical clips. Swipe up for gallery.'
+                    : 'Tap photo. Hold to record clips. Swipe up for gallery.'}
                 </div>
+
+                {isMobileCapture && (
+                  <div className="absolute top-28 left-1/2 -translate-x-1/2 z-30 rounded-full bg-black/55 border border-white/15 px-3 py-1 text-[11px] text-white/85">
+                    Mobile 9:16 capture active
+                  </div>
+                )}
 
                 {micDenied && (
                   <div className="absolute bottom-36 left-1/2 -translate-x-1/2 z-30 rounded-full bg-black/55 border border-white/15 px-3 py-1 text-[11px] text-white/85">
@@ -1431,10 +1679,13 @@ export default function CreatePage() {
                       onPointerUp={onCapturePointerUp}
                       onPointerLeave={onCapturePointerCancel}
                       onPointerCancel={onCapturePointerCancel}
+                      disabled={!cameraReady}
                       className={`absolute inset-[12px] rounded-full border border-white/30 transition-all touch-none ${
                         recording
                           ? 'bg-gradient-to-br from-fuchsia-500 to-purple-500 scale-[0.93]'
-                          : 'bg-white'
+                          : cameraReady
+                            ? 'bg-white'
+                            : 'bg-white/65'
                       }`}
                     />
                   </div>
@@ -1462,8 +1713,10 @@ export default function CreatePage() {
                 </h2>
                 <p className="text-sm text-gray-400 max-w-[320px] mb-6">
                   {requestingPermissions
-                    ? 'Requesting camera first, then microphone to keep capture native.'
-                    : 'Camera permission was denied. Swipe up or use gallery to keep creating.'}
+                    ? isMobileCapture
+                      ? 'Requesting vertical mobile camera and clean microphone input.'
+                      : 'Requesting camera first, then microphone to keep capture native.'
+                    : 'Camera permission was denied or the device camera is unavailable. Use gallery to keep creating.'}
                 </p>
 
                 <button

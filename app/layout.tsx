@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import './globals.css';
 import BottomNav from '@/components/BottomNav';
 import { supabase } from '@/lib/supabase';
+import { hasActiveCreateUpload } from '@/lib/createUploadQueue';
 
 const PUBLIC_PATHS = new Set(['/login', '/admin/login', '/reset-password', '/verify-account']);
 
@@ -104,6 +105,17 @@ export default function RootLayout({
       subscription.unsubscribe();
     };
   }, [isPublicPage, pathname, router]);
+
+  useEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasActiveCreateUpload()) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
 
   const showNav = isAuthenticated && isVerified && !isPublicPage;
 
