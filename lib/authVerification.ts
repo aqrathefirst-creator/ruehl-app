@@ -63,8 +63,19 @@ export async function sendVerificationCode(pending: PendingVerification) {
     });
 
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-      throw new Error(payload?.error || 'Unable to send verification code.');
+      const raw = await response.text();
+      let message = 'Unable to send verification code.';
+
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as { error?: string };
+          message = parsed?.error || raw;
+        } catch {
+          message = raw;
+        }
+      }
+
+      throw new Error(message);
     }
 
     markVerificationCodeSent();

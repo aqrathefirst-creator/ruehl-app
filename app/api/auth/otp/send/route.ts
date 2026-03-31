@@ -54,63 +54,68 @@ async function sendEmailOtp(email: string, code: string) {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as { email?: string } | null;
-  const rawEmail = body?.email?.trim();
-
-  if (!rawEmail) return jsonError('email is required', 400);
-
-  const email = normalizeEmail(rawEmail);
-  if (!isValidEmail(email)) return jsonError('Invalid email address', 400);
-
-  const secret = resolveOtpSecret();
-
-  const supabase = createServiceRoleSupabase();
-  const now = Date.now();
-
-  const { data: existing, error: existingError } = await supabase
-    .from('email_verification_otps')
-    .select('cooldown_until')
-    .eq('email', email)
-    .maybeSingle();
-
-  if (existingError) {
-    return jsonError(existingError.message || 'Unable to process OTP request', 500);
-  }
-
-  if (existing?.cooldown_until) {
-    const waitMs = new Date(existing.cooldown_until).getTime() - now;
-    if (waitMs > 0) {
-      const waitSeconds = Math.ceil(waitMs / 1000);
-      return jsonError(`Please wait ${waitSeconds}s before requesting a new code.`, 429);
-    }
-  }
-
-  const code = generateOtpCode();
-  const otpHash = createOtpHash(email, code, secret);
-  const expiresAt = new Date(now + OTP_EXPIRY_SECONDS * 1000).toISOString();
-  const cooldownUntil = new Date(now + OTP_RESEND_SECONDS * 1000).toISOString();
-
-  const { error: saveError } = await supabase
-    .from('email_verification_otps')
-    .upsert({
-      email,
-      otp_hash: otpHash,
-      attempts: 0,
-      expires_at: expiresAt,
-      cooldown_until: cooldownUntil,
-      updated_at: new Date(now).toISOString(),
-    });
-
-  if (saveError) {
-    return jsonError(saveError.message || 'Unable to store OTP', 500);
-  }
-
   try {
-    await sendEmailOtp(email, code);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unable to send OTP email';
-    return jsonError(message, 502);
-  }
+    const body = (await request.json().catch(() => null)) as { email?: string } | null;
+    const rawEmail = body?.email?.trim();
 
-  return jsonOk({ success: true, cooldown_seconds: OTP_RESEND_SECONDS });
+    if (!rawEmail) return jsonError('email is required', 400);
+
+    const email = normalizeEmail(rawEmail);
+    if (!isValidEmail(email)) return jsonError('Invalid email address', 400);
+
+    const secret = resolveOtpSecret();
+
+    const supabase = createServiceRoleSupabase();
+    const now = Date.now();
+
+    const { data: existing, error: existingError } = await supabase
+      .from('email_verification_otps')
+      .select('cooldown_until')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existingError) {
+      return jsonError(existingError.message || 'Unable to process OTP request', 500);
+    }
+
+    if (existing?.cooldown_until) {
+      const waitMs = new Date(existing.cooldown_until).getTime() - now;
+      if (waitMs > 0) {
+        const waitSeconds = Math.ceil(waitMs / 1000);
+        return jsonError(`Please wait ${waitSeconds}s before requesting a new code.`, 429);
+      }
+    }
+
+    const code = generateOtpCode();
+    const otpHash = createOtpHash(email, code, secret);
+    const expiresAt = new Date(now + OTP_EXPIRY_SECONDS * 1000).toISOString();
+    const cooldownUntil = new Date(now + OTP_RESEND_SECONDS * 1000).toISOString();
+
+    const { error: saveError } = await supabase
+      .from('email_verification_otps')
+      .upsert({
+        email,
+        otp_hash: otpHash,
+        attempts: 0,
+        expires_at: expiresAt,
+        cooldown_until: cooldownUntil,
+        updated_at: new Date(now).toISOString(),
+      });
+
+    if (saveError) {
+      return jsonError(saveError.message || 'Unable to store OTP', 500);
+    }
+
+    try {
+      await sendEmailOtp(email, code);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to send OTP email';
+      return jsonError(message, 502);
+    }
+
+    return jsonOk({ success: true, cooldown_seconds: OTP_RESEND_SECONDS });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to send verification code.';
+    return jsonError(message, 500);
+  }
 }
