@@ -486,6 +486,23 @@ export default function CreatePage() {
   useEffect(() => {
     void initializePermissions();
 
+  // Attach the captured stream to the video element once it mounts.
+  // The <video> is only rendered when !requestingPermissions, so cameraVideoRef is null
+  // during initializePermissions(). This effect runs when the video element becomes available.
+  useEffect(() => {
+    if (requestingPermissions) return;
+    const video = cameraVideoRef.current;
+    const stream = cameraStreamRef.current;
+    if (!video || !stream) return;
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+      video.play().catch(() => undefined);
+    }
+  }, [requestingPermissions]);
+
+  useEffect(() => {
+    void initializePermissions();
+
     return () => {
       stopProgressLoop();
       if (holdTimeoutRef.current) window.clearTimeout(holdTimeoutRef.current);
