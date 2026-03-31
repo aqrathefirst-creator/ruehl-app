@@ -10,6 +10,10 @@ export default function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
 
+  if ((pathname || '').startsWith('/admin')) {
+    return null;
+  }
+
   const [userId, setUserId] = useState<string | null>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
