@@ -12,6 +12,7 @@ type Profile = {
   id: string;
   username: string;
   avatar_url?: string | null;
+  is_verified?: boolean;
   verified?: boolean;
   activity_type?: string | null;
   shadow_banned?: boolean;
@@ -195,6 +196,8 @@ export default function NowFeedPage() {
   const hasLifted = (postId: string) =>
     lifts.some(l => l.post_id === postId && l.user_id === user?.id);
 
+  const isProfileVerified = (userProfile?: Profile | null) => Boolean(userProfile?.is_verified ?? userProfile?.verified);
+
   const toggleLike = async (postId: string) => {
     if (!user) return;
 
@@ -299,7 +302,7 @@ export default function NowFeedPage() {
   };
 
   return (
-    <div className="w-full min-h-screen bg-white flex justify-center">
+    <div className="w-full min-h-screen bg-black flex justify-center">
 
       <div className="w-full max-w-[420px] h-[100dvh] overflow-y-scroll snap-y snap-mandatory relative">
 
@@ -349,7 +352,7 @@ export default function NowFeedPage() {
 
                 <div className="text-sm font-semibold flex items-center gap-0">
                   {userProfile?.username || 'User'}
-                  {userProfile?.verified && <VerificationBadge />}
+                  {isProfileVerified(userProfile) && <VerificationBadge />}
                 </div>
               </div>
 
@@ -447,7 +450,7 @@ export default function NowFeedPage() {
                     <div key={c.id} className="bg-white/5 rounded-xl p-3 border border-white/10">
                       <div className="font-semibold text-sm text-white flex items-center gap-1">
                         {commentUser?.username}
-                        {commentUser?.verified && <VerificationBadge />}
+                        {isProfileVerified(commentUser) && <VerificationBadge />}
                       </div>
                       <p className="text-sm text-gray-300 mt-1">{c.content}</p>
                     </div>

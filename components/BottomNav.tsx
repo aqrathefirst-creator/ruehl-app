@@ -5,7 +5,7 @@ import { Home, Flame, Calendar, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
 import { clearCreateUploadState, subscribeToCreateUpload, type CreateUploadSnapshot } from '@/lib/createUploadQueue';
-import { prewarmCameraStream } from '@/lib/cameraSession';
+import { clearPrewarmedCameraStream, prewarmCameraStream } from '@/lib/cameraSession';
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -105,6 +105,11 @@ export default function BottomNav() {
       })
       .catch(() => undefined);
   }, [router]);
+
+  useEffect(() => {
+    if ((pathname || '').startsWith('/create')) return;
+    clearPrewarmedCameraStream();
+  }, [pathname]);
 
   // 🔥 UPDATED TABS (Train removed, Now moved)
   const tabs = [

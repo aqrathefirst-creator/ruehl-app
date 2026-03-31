@@ -13,6 +13,7 @@ type Profile = {
   id: string;
   username: string;
   avatar_url: string | null;
+  is_verified?: boolean;
   verified?: boolean;
 };
 
@@ -27,6 +28,7 @@ type Post = {
   track_name?: string | null;
   artist_name?: string | null;
   sound_id?: string | null;
+  audio_url?: string | null;
 };
 
 type Comment = {
@@ -168,7 +170,7 @@ const [suggestedSounds, setSuggestedSounds] = useState<any[]>([]);
         .limit(50),
       supabase
         .from('profiles')
-        .select('id, username, avatar_url, verified'),
+        .select('id, username, avatar_url, verified, is_verified'),
       supabase
         .from('comments')
         .select('id, content, user_id, post_id')
@@ -200,7 +202,6 @@ const [suggestedSounds, setSuggestedSounds] = useState<any[]>([]);
         .limit(10),
     ]);
 
-    setPosts(postsData || []);
     setProfiles(profilesData || []);
     setComments(commentsData || []);
     setLikes(likesData || []);
@@ -210,6 +211,29 @@ const [suggestedSounds, setSuggestedSounds] = useState<any[]>([]);
     setUpcomingTracks((upcomingData as Sound[]) || []);
 
     const ids = saved?.map((s: { sound_id: string }) => s.sound_id) || [];
+
+    const postSoundIds = (postsData || [])
+      .map((post) => post.sound_id)
+      .filter((id): id is string => Boolean(id));
+
+    if (postSoundIds.length > 0) {
+      const { data: postSounds } = await supabase
+        .from('sounds')
+        .select('id, preview_url')
+        .in('id', postSoundIds);
+
+      const previewBySoundId = new Map((postSounds || []).map((sound) => [sound.id, sound.preview_url || null]));
+
+      setPosts(
+        ((postsData || []) as Post[]).map((post) => ({
+          ...post,
+          audio_url: post.sound_id ? (previewBySoundId.get(post.sound_id) ?? null) : null,
+        }))
+      );
+    } else {
+      setPosts((postsData || []) as Post[]);
+    }
+
     if (ids.length > 0) {
       const { data: soundsData } = await supabase
         .from('sounds')
@@ -224,6 +248,7 @@ const [suggestedSounds, setSuggestedSounds] = useState<any[]>([]);
   }, [currentUser]);
 
   const getProfile = (id: string) => profiles.find(p => p.id === id);
+  const isProfileVerified = (profile: Profile | undefined) => Boolean(profile?.is_verified ?? profile?.verified);
   const getLikes = (postId: string) => likes.filter(l => l.post_id === postId);
   const getLifts = (postId: string) => lifts.filter((l) => l.post_id === postId);
   const getComments = (postId: string) => comments.filter((c) => c.post_id === postId);
@@ -311,6 +336,11 @@ const fetchSuggestedSounds = async (mood: string) => {
   const powerFeedPosts = useMemo(
     () => sortedPosts.filter((post) => !post.media_url && !!post.content?.trim()).slice(0, 12),
     [sortedPosts]
+  );
+
+  const hasMusicTracks = useMemo(
+    () => trendingTracks.length > 0 || upcomingTracks.length > 0,
+    [trendingTracks, upcomingTracks]
   );
 
   useEffect(() => {
@@ -640,13 +670,21 @@ const fetchSuggestedSounds = async (mood: string) => {
                     {/* Top-left: username */}
                     <div className="absolute top-4 left-4 flex items-center gap-1.5">
                       <span className="text-[14px] font-bold text-white drop-shadow-sm">@{user?.username || 'user'}</span>
-                      {user?.verified && <VerificationBadge />}
+                      {isProfileVerified(user) && <VerificationBadge />}
                     </div>
                     {/* Bottom: caption + like count */}
                     <div className="absolute bottom-4 left-4 right-4 text-left">
                       {post.content && (
                         <p className="text-[13px] text-white/90 font-medium truncate mb-1.5">{post.content}</p>
                       )}
+
+                      {post.track_name && post.artist_name && (
+                        <div className="mb-1.5 inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/20 bg-black/45 px-2.5 py-1 text-[11px] text-white/90">
+                          <span>🎵</span>
+                          <span className="truncate">{post.track_name} - {post.artist_name}</span>
+                        </div>
+                      )}
+
                       <div className="flex items-center gap-1.5">
                         <span className={`text-sm ${liked ? 'text-red-400' : 'text-white/50'}`}>{liked ? '♥' : '♡'}</span>
                         <span className="text-xs text-white/50">{likeCount}</span>
@@ -681,6 +719,12 @@ const fetchSuggestedSounds = async (mood: string) => {
                     style={{ height: 130 }}
                   >
                     <p className="text-[15px] font-semibold text-white leading-snug line-clamp-2">{post.content}</p>
+                    {post.track_name && post.artist_name && (
+                      <div className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/20 bg-black/45 px-2 py-0.5 text-[10px] text-white/85">
+                        <span>🎵</span>
+                        <span className="truncate">{post.track_name} - {post.artist_name}</span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
                       <span className="text-[12px] text-gray-500">@{user?.username || 'user'}</span>
                       <div className="flex items-center gap-1 text-[12px] text-orange-400">
@@ -695,6 +739,7 @@ const fetchSuggestedSounds = async (mood: string) => {
           </section>
 
           {/* ── MUSIC ── */}
+          {hasMusicTracks && (
           <section>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-[18px] font-bold text-white">Music</h2>
@@ -760,6 +805,7 @@ const fetchSuggestedSounds = async (mood: string) => {
               ))}
             </div>
           </section>
+          )}
 
           {/* ── TRAIN ── */}
           <section>
@@ -844,9 +890,10 @@ const fetchSuggestedSounds = async (mood: string) => {
               <div className="flex items-start justify-between gap-3 mb-4">
                 <button
                   onClick={() => router.push(`/profile/${activePowerPost.user_id}`)}
-                  className="text-[14px] font-semibold text-white active:text-purple-300 transition-colors"
+                  className="text-[14px] font-semibold text-white active:text-purple-300 transition-colors inline-flex items-center gap-1"
                 >
                   @{getProfile(activePowerPost.user_id)?.username || 'user'}
+                  {isProfileVerified(getProfile(activePowerPost.user_id)) && <VerificationBadge />}
                 </button>
                 <button
                   onClick={closePowerPost}
@@ -857,6 +904,13 @@ const fetchSuggestedSounds = async (mood: string) => {
               </div>
 
               <p className="text-white text-[16px] leading-relaxed">{activePowerPost.content}</p>
+
+              {activePowerPost.track_name && activePowerPost.artist_name && (
+                <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[12px] text-white/90">
+                  <span>🎵</span>
+                  <span className="truncate">{activePowerPost.track_name} - {activePowerPost.artist_name}</span>
+                </div>
+              )}
 
               <div className="mt-5 flex items-center gap-2">
                 <button

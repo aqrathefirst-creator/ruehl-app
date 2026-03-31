@@ -840,6 +840,55 @@ export default function CreatePage() {
   }, []);
 
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      const isHidden = document.visibilityState === 'hidden';
+
+      if (isHidden) {
+        if (holdTimeoutRef.current) {
+          window.clearTimeout(holdTimeoutRef.current);
+          holdTimeoutRef.current = null;
+        }
+
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+          mediaRecorderRef.current = null;
+        }
+
+        stopMicrophoneStream();
+        stopCameraStream();
+        clearPrewarmedCameraStream();
+        return;
+      }
+
+      if (
+        view === 'camera' &&
+        !isPowr &&
+        !showPortraitGuard &&
+        !cameraDenied &&
+        !requestingPermissions &&
+        !cameraStreamRef.current
+      ) {
+        void initializePermissions();
+      }
+    };
+
+    const handlePageHide = () => {
+      stopMicrophoneStream();
+      stopCameraStream();
+      clearPrewarmedCameraStream();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handlePageHide);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraDenied, isPowr, requestingPermissions, showPortraitGuard, view]);
+
+  useEffect(() => {
     if (view === 'camera') {
       if (showPortraitGuard) {
         stopPreviewRenderLoop();
@@ -1676,6 +1725,7 @@ export default function CreatePage() {
           content: caption,
           user_id: user.id,
           media_url: isPowr ? null : mediaUrl,
+          audio_url: selectedSound?.preview_url || null,
           thumbnail_url: thumbnailUrl,
           track_name: selectedSound?.track_name || trackName,
           artist_name: selectedSound?.artist_name || artistName,

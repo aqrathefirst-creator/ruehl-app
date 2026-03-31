@@ -3,6 +3,9 @@ type FacingMode = 'user' | 'environment';
 let prewarmedStream: MediaStream | null = null;
 let prewarmedFacing: FacingMode | null = null;
 let prewarmPromise: Promise<MediaStream | null> | null = null;
+let prewarmTimeoutId: number | null = null;
+
+const PREWARM_TTL_MS = 10_000;
 
 const getConstraints = (facingMode: FacingMode): MediaStreamConstraints => ({
   video: {
@@ -24,6 +27,11 @@ export const hasPrewarmedCameraStream = (facingMode: FacingMode) => {
 };
 
 export const clearPrewarmedCameraStream = () => {
+  if (prewarmTimeoutId) {
+    window.clearTimeout(prewarmTimeoutId);
+    prewarmTimeoutId = null;
+  }
+
   if (prewarmedStream) {
     prewarmedStream.getTracks().forEach((track) => track.stop());
   }
@@ -51,8 +59,17 @@ export const prewarmCameraStream = async (facingMode: FacingMode = 'user') => {
   prewarmPromise = navigator.mediaDevices
     .getUserMedia(getConstraints(facingMode))
     .then((stream) => {
+      if (prewarmTimeoutId) {
+        window.clearTimeout(prewarmTimeoutId);
+      }
+
       prewarmedStream = stream;
       prewarmedFacing = facingMode;
+
+      prewarmTimeoutId = window.setTimeout(() => {
+        clearPrewarmedCameraStream();
+      }, PREWARM_TTL_MS);
+
       return stream;
     })
     .catch(() => null)
@@ -65,6 +82,11 @@ export const prewarmCameraStream = async (facingMode: FacingMode = 'user') => {
 
 export const takePrewarmedCameraStream = (facingMode: FacingMode) => {
   if (!hasPrewarmedCameraStream(facingMode)) return null;
+
+  if (prewarmTimeoutId) {
+    window.clearTimeout(prewarmTimeoutId);
+    prewarmTimeoutId = null;
+  }
 
   const stream = prewarmedStream;
   prewarmedStream = null;
