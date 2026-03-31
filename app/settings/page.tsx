@@ -21,6 +21,7 @@ type ActivitySummary = {
   liked_posts: Array<{ id: string; post_id: string; created_at: string }>;
   saved_posts: Array<{ id: string; post_id: string; created_at: string }>;
   comments: Array<{ id: string; post_id: string; content: string; created_at: string }>;
+  lifted_posts: Array<{ id: string; post_id: string; created_at: string }>;
   matches: Array<{ id: string; status: string; created_at: string }>;
 };
 
@@ -342,6 +343,10 @@ export default function SettingsPage() {
               <div className="text-xl font-bold mt-1">{activity?.comments.length || 0}</div>
             </div>
             <div className="rounded-lg bg-black/60 border border-white/10 p-3">
+              <div className="text-xs text-gray-500">Lifted</div>
+              <div className="text-xl font-bold mt-1">{activity?.lifted_posts.length || 0}</div>
+            </div>
+            <div className="rounded-lg bg-black/60 border border-white/10 p-3">
               <div className="text-xs text-gray-500">Matches</div>
               <div className="text-xl font-bold mt-1">{activity?.matches.length || 0}</div>
             </div>
@@ -358,8 +363,9 @@ export default function SettingsPage() {
             )}
           </div>
           <div className="space-y-2">
-            <h3 className="text-xs uppercase tracking-wide text-gray-500">Recent likes and saves</h3>
+            <h3 className="text-xs uppercase tracking-wide text-gray-500">Recent likes, lifts and saves</h3>
             <div className="text-xs text-gray-300">Likes: {(activity?.liked_posts || []).slice(0, 5).map((i) => i.post_id.slice(0, 8)).join(', ') || 'none'}</div>
+            <div className="text-xs text-gray-300">Lifts: {(activity?.lifted_posts || []).slice(0, 5).map((i) => i.post_id.slice(0, 8)).join(', ') || 'none'}</div>
             <div className="text-xs text-gray-300">Saves: {(activity?.saved_posts || []).slice(0, 5).map((i) => i.post_id.slice(0, 8)).join(', ') || 'none'}</div>
           </div>
         </section>

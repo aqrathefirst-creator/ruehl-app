@@ -22,6 +22,13 @@ type Post = {
   user_id: string;
 };
 
+type Lift = {
+  id: string;
+  user_id: string;
+  post_id: string;
+  created_at?: string;
+};
+
 async function withAuthFetch(path: string, options: RequestInit = {}) {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -71,10 +78,11 @@ export default function Page() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [loadingFollow, setLoadingFollow] = useState(false);
 
-  const [tab, setTab] = useState<'grid' | 'powr'>('grid');
+  const [tab, setTab] = useState<'posts' | 'powr' | 'likes' | 'lifted'>('posts');
   const [powrPosts, setPowrPosts] = useState<any[]>([]);
-  const [powrLikes, setPowrLikes] = useState<any[]>([]);
-  const [powrReplies, setPowrReplies] = useState<any[]>([]);
+  const [likedPowrPosts, setLikedPowrPosts] = useState<any[]>([]);
+  const [liftedPowrPosts, setLiftedPowrPosts] = useState<any[]>([]);
+  const [lifts, setLifts] = useState<Lift[]>([]);
   const [replyInputs, setReplyInputs] = useState<any>({});
   const [newPowr, setNewPowr] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -142,6 +150,7 @@ export default function Page() {
 
     const { data: commentsData } = await supabase.from('comments').select('*');
     const { data: likesData } = await supabase.from('likes').select('*');
+    const { data: liftsData } = await supabase.from('post_lifts').select('*');
 
     const { data: followersData } = await supabase
       .from('follows')
@@ -160,6 +169,42 @@ export default function Page() {
       .is('media_url', null)
       .order('created_at', { ascending: false });
 
+    const { data: likedRows } = await supabase
+      .from('likes')
+      .select('post_id')
+      .eq('user_id', targetProfileId);
+
+    const likedPostIds = [...new Set((likedRows || []).map((row: any) => row.post_id).filter(Boolean))];
+
+    let likedPowrData: any[] = [];
+    if (likedPostIds.length > 0) {
+      const { data } = await supabase
+        .from('posts')
+        .select('*')
+        .in('id', likedPostIds)
+        .is('media_url', null)
+        .order('created_at', { ascending: false });
+      likedPowrData = data || [];
+    }
+
+    const { data: liftedRows } = await supabase
+      .from('post_lifts')
+      .select('post_id')
+      .eq('user_id', targetProfileId);
+
+    const liftedPostIds = [...new Set((liftedRows || []).map((row: any) => row.post_id).filter(Boolean))];
+
+    let liftedPowrData: any[] = [];
+    if (liftedPostIds.length > 0) {
+      const { data } = await supabase
+        .from('posts')
+        .select('*')
+        .in('id', liftedPostIds)
+        .is('media_url', null)
+        .order('created_at', { ascending: false });
+      liftedPowrData = data || [];
+    }
+
     setProfile(profileData);
     setAllProfiles(allProfilesData || []);
     setPosts(postsData || []);
@@ -168,8 +213,9 @@ export default function Page() {
     setFollowers(followersData || []);
     setFollowing(followingData || []);
     setPowrPosts(powrData || []);
-    setPowrLikes([]);
-    setPowrReplies([]);
+    setLikedPowrPosts(likedPowrData || []);
+    setLiftedPowrPosts(liftedPowrData || []);
+    setLifts((liftsData || []) as Lift[]);
 
     if (userData.user) {
       const { data: followData } = await supabase
@@ -187,7 +233,7 @@ export default function Page() {
     fetchData();
 
     const channel = supabase
-      .channel('comments')
+      .channel('profile-engagement')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'comments' },
@@ -201,6 +247,21 @@ export default function Page() {
       .on(
         'postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'comments' },
+        () => fetchData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'likes' },
+        () => fetchData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'post_lifts' },
+        () => fetchData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'posts' },
         () => fetchData()
       )
       .subscribe();
@@ -249,8 +310,14 @@ export default function Page() {
   const getPowrPostComments = (postId: string) =>
     comments.filter((c: any) => c.post_id === postId);
 
+  const getPowrPostLifts = (postId: string) =>
+    lifts.filter((l: Lift) => l.post_id === postId).length;
+
   const hasPowrLiked = (postId: string) =>
     likes.some((l: any) => l.post_id === postId && l.user_id === currentUser?.id);
+
+  const hasPowrLifted = (postId: string) =>
+    lifts.some((l: Lift) => l.post_id === postId && l.user_id === currentUser?.id);
 
   const parseMediaUrls = (value: unknown): string[] => {
     if (Array.isArray(value)) {
@@ -372,6 +439,25 @@ export default function Page() {
     });
 
     setReplyInputs((prev: any) => ({ ...prev, [postId]: '' }));
+    fetchData();
+  };
+
+  const togglePowrLift = async (postId: string) => {
+    if (!currentUser) return;
+
+    const existing = lifts.find(
+      (l: Lift) => l.post_id === postId && l.user_id === currentUser.id
+    );
+
+    if (existing) {
+      await supabase.from('post_lifts').delete().eq('id', existing.id);
+    } else {
+      await supabase.from('post_lifts').insert({
+        user_id: currentUser.id,
+        post_id: postId,
+      });
+    }
+
     fetchData();
   };
 
@@ -725,6 +811,7 @@ export default function Page() {
                   <div className="w-full h-full rounded-full overflow-hidden bg-black relative">
                     <img
                       src={localAvatarPreview || profile.avatar_url}
+                      alt={`${profile.username} avatar`}
                       className="w-full h-full object-cover"
                     />
                     {currentUser?.id === resolvedProfileId && (
@@ -741,6 +828,7 @@ export default function Page() {
                     {localAvatarPreview && (
                       <img
                         src={localAvatarPreview}
+                        alt="Avatar preview"
                         className="w-full h-full object-cover rounded-full"
                       />
                     )}
@@ -871,15 +959,15 @@ export default function Page() {
           </button>
         </div>
 
-        {/* GRID / POWR TABS */}
-        <div className="px-6 flex gap-6 border-b border-white/10">
+        {/* POSTS / POWR / LIKES / LIFTED TABS */}
+        <div className="px-6 flex gap-5 border-b border-white/10 overflow-x-auto">
           <button
-            onClick={() => setTab('grid')}
+            onClick={() => setTab('posts')}
             className={`pb-4 text-sm font-semibold transition-colors ${
-              tab === 'grid' ? 'text-white border-b-2 border-white' : 'text-gray-500'
+              tab === 'posts' ? 'text-white border-b-2 border-white' : 'text-gray-500'
             }`}
           >
-            Grid
+            Posts
           </button>
           <button
             onClick={() => setTab('powr')}
@@ -889,10 +977,26 @@ export default function Page() {
           >
             POWR
           </button>
+          <button
+            onClick={() => setTab('likes')}
+            className={`pb-4 text-sm font-semibold transition-colors ${
+              tab === 'likes' ? 'text-white border-b-2 border-white' : 'text-gray-500'
+            }`}
+          >
+            Likes
+          </button>
+          <button
+            onClick={() => setTab('lifted')}
+            className={`pb-4 text-sm font-semibold transition-colors ${
+              tab === 'lifted' ? 'text-white border-b-2 border-white' : 'text-gray-500'
+            }`}
+          >
+            Lifted
+          </button>
         </div>
 
-        {/* GRID TAB */}
-        {tab === 'grid' && (
+        {/* POSTS TAB */}
+        {tab === 'posts' && (
           <div className="px-6 pt-4">
             <div className="grid grid-cols-3 gap-1">
               {mediaPosts.map(post => (
@@ -924,6 +1028,7 @@ export default function Page() {
                   ) : (
                     <img
                       src={post.mediaItems[0]}
+                      alt="Grid post media"
                       className="aspect-square object-cover"
                     />
                   )}
@@ -1001,6 +1106,8 @@ export default function Page() {
             {powrPosts.map(p => {
               const postComments = getPowrPostComments(p.id);
               const liked = hasPowrLiked(p.id);
+              const lifted = hasPowrLifted(p.id);
+              const liftCount = getPowrPostLifts(p.id);
               const author = getUserProfile(p.user_id);
 
               return (
@@ -1042,7 +1149,18 @@ export default function Page() {
                       <span className="text-lg">💬</span>
                       <span>{postComments.length}</span>
                     </button>
+                    <button
+                      onClick={() => togglePowrLift(p.id)}
+                      className="flex items-center gap-2 text-sm hover:text-cyan-400 active:text-cyan-500 transition-colors"
+                    >
+                      <span className={`text-lg ${lifted ? 'text-cyan-300' : 'text-gray-500'}`}>↻</span>
+                      <span>{liftCount}</span>
+                    </button>
                   </div>
+
+                  {liftCount > 0 && (
+                    <div className="text-[11px] text-cyan-300">Lifted by {liftCount} {liftCount === 1 ? 'user' : 'users'}</div>
+                  )}
 
                   {postComments.length > 0 && (
                     <div className="space-y-3 bg-white/5 rounded-lg p-3 border border-white/10">
@@ -1092,6 +1210,59 @@ export default function Page() {
           </div>
         )}
 
+        {tab === 'likes' && (
+          <div className="px-6 py-4 space-y-4">
+            {likedPowrPosts.length === 0 && (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-gray-400">
+                No liked Powr posts yet.
+              </div>
+            )}
+
+            {likedPowrPosts.map((post) => {
+              const author = getUserProfile(post.user_id);
+              return (
+                <div key={post.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <div className="text-sm font-semibold text-white flex items-center gap-1">
+                    {author?.username || 'User'}
+                    {author?.verified && <VerificationBadge />}
+                  </div>
+                  <p className="mt-2 text-sm text-gray-200 leading-relaxed">{post.content}</p>
+                  <div className="mt-3 text-xs text-gray-400">
+                    ♥ {getPowrPostLikes(post.id)} · 💬 {getPowrPostComments(post.id).length} · ↻ {getPowrPostLifts(post.id)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {tab === 'lifted' && (
+          <div className="px-6 py-4 space-y-4">
+            {liftedPowrPosts.length === 0 && (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-gray-400">
+                No lifted Powr posts yet.
+              </div>
+            )}
+
+            {liftedPowrPosts.map((post) => {
+              const author = getUserProfile(post.user_id);
+              return (
+                <div key={post.id} className="rounded-2xl border border-cyan-400/20 bg-cyan-500/[0.04] p-4">
+                  <div className="text-[11px] uppercase tracking-wider text-cyan-300 mb-2">Lifted</div>
+                  <div className="text-sm font-semibold text-white flex items-center gap-1">
+                    {author?.username || 'User'}
+                    {author?.verified && <VerificationBadge />}
+                  </div>
+                  <p className="mt-2 text-sm text-gray-200 leading-relaxed">{post.content}</p>
+                  <div className="mt-3 text-xs text-gray-400">
+                    ♥ {getPowrPostLikes(post.id)} · 💬 {getPowrPostComments(post.id).length} · ↻ {getPowrPostLifts(post.id)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* AVATAR CROP MODAL */}
         {avatarCropOpen && avatarCropSource && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
@@ -1100,6 +1271,7 @@ export default function Page() {
               <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-black mb-3">
                 <img
                   src={avatarCropSource}
+                  alt="Avatar crop preview"
                   className="w-full h-full object-cover"
                   style={{ transform: `scale(${avatarZoom})` }}
                 />
@@ -1170,7 +1342,7 @@ export default function Page() {
                       >
                         {activePostMedia.map((url) => (
                           <div key={url} className="w-full shrink-0 snap-center">
-                            <img src={url} className="w-full max-h-[60vh] object-contain" />
+                            <img src={url} alt="Post media" className="w-full max-h-[60vh] object-contain" />
                           </div>
                         ))}
                       </div>
@@ -1184,7 +1356,7 @@ export default function Page() {
                           playsInline
                         />
                       ) : (
-                        <img src={activePostMedia[0]} className="w-full max-h-[60vh] object-contain" />
+                        <img src={activePostMedia[0]} alt="Post media" className="w-full max-h-[60vh] object-contain" />
                       )
                     ) : null}
 

@@ -45,6 +45,12 @@ type Comment = {
   content: string;
 };
 
+type Lift = {
+  id: string;
+  user_id: string;
+  post_id: string;
+};
+
 export default function NowFeedPage() {
 
   // ✅ GLOBAL USER
@@ -54,6 +60,8 @@ export default function NowFeedPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [likes, setLikes] = useState<Like[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [lifts, setLifts] = useState<Lift[]>([]);
+  const [followingIds, setFollowingIds] = useState<string[]>([]);
 
   const [activeAudioPost, setActiveAudioPost] = useState<string | null>(null);
   const [animatingPost, setAnimatingPost] = useState<string | null>(null);
@@ -63,20 +71,26 @@ export default function NowFeedPage() {
   const router = useRouter();
 
   const fetchData = async () => {
-    const { data: postsData } = await supabase
-      .from('posts')
-      .select('*')
-      .not('media_url', 'is', null)
-      .order('created_at', { ascending: false });
-    const { data: profilesData } = await supabase.from('profiles').select('*');
-    const { data: likesData } = await supabase.from('likes').select('*');
-    const { data: commentsData } = await supabase.from('comments').select('*');
+    const [{ data: postsData }, { data: profilesData }, { data: likesData }, { data: commentsData }, { data: liftsData }, { data: followingData }] = await Promise.all([
+      supabase.from('posts').select('*').order('created_at', { ascending: false }).limit(240),
+      supabase.from('profiles').select('*'),
+      supabase.from('likes').select('*'),
+      supabase.from('comments').select('*'),
+      supabase.from('post_lifts').select('*'),
+      user?.id ? supabase.from('follows').select('following_id').eq('follower_id', user.id) : Promise.resolve({ data: [] as { following_id: string }[] }),
+    ]);
 
     const nextProfiles = (profilesData || []) as Profile[];
     const nextPosts = (postsData || []) as Post[];
+    const nextLifts = (liftsData || []) as Lift[];
+    const nextFollowingIds = ((followingData || []) as { following_id: string }[]).map((item) => item.following_id);
 
     const profileMap = new Map(nextProfiles.map((item) => [item.id, item]));
     const ownId = user?.id || null;
+    const liftCountByPost = nextLifts.reduce<Record<string, number>>((acc, item) => {
+      acc[item.post_id] = (acc[item.post_id] || 0) + 1;
+      return acc;
+    }, {});
 
     const normalPosts = nextPosts.filter((post) => {
       if (post.hidden_by_admin === true || post.discovery_disabled === true) return false;
@@ -95,10 +109,32 @@ export default function NowFeedPage() {
       })
       .slice(0, 2);
 
-    setPosts([...normalPosts, ...reducedShadowPosts]);
+    const basePosts = [...normalPosts, ...reducedShadowPosts];
+    const distributablePosts = basePosts.filter((post) => {
+      if (post.media_url) return true;
+      return (liftCountByPost[post.id] || 0) > 0;
+    });
+
+    distributablePosts.sort((a, b) => {
+      const aFollowed = nextFollowingIds.includes(a.user_id) ? 1 : 0;
+      const bFollowed = nextFollowingIds.includes(b.user_id) ? 1 : 0;
+      if (aFollowed !== bFollowed) return bFollowed - aFollowed;
+
+      const aLift = liftCountByPost[a.id] || 0;
+      const bLift = liftCountByPost[b.id] || 0;
+      if (aLift !== bLift) return bLift - aLift;
+
+      const aTime = new Date(a.created_at || 0).getTime();
+      const bTime = new Date(b.created_at || 0).getTime();
+      return bTime - aTime;
+    });
+
+    setPosts(distributablePosts);
     setProfiles(nextProfiles);
     setLikes(likesData || []);
     setComments(commentsData || []);
+    setLifts(nextLifts);
+    setFollowingIds(nextFollowingIds);
   };
 
   useEffect(() => {
@@ -147,8 +183,14 @@ export default function NowFeedPage() {
   const getComments = (postId: string) =>
     comments.filter(c => c.post_id === postId);
 
+  const getLifts = (postId: string) =>
+    lifts.filter(l => l.post_id === postId);
+
   const hasLiked = (postId: string) =>
     likes.some(l => l.post_id === postId && l.user_id === user?.id);
+
+  const hasLifted = (postId: string) =>
+    lifts.some(l => l.post_id === postId && l.user_id === user?.id);
 
   const toggleLike = async (postId: string) => {
     if (!user) return;
@@ -193,6 +235,43 @@ export default function NowFeedPage() {
     fetchData();
   };
 
+  const toggleLift = async (postId: string) => {
+    if (!user) return;
+
+    const existing = lifts.find(
+      l => l.post_id === postId && l.user_id === user.id
+    );
+
+    if (existing) {
+      await supabase.from('post_lifts').delete().eq('id', existing.id);
+    } else {
+      await supabase.from('post_lifts').insert({
+        user_id: user.id,
+        post_id: postId,
+      });
+
+      if (navigator.vibrate) navigator.vibrate(10);
+    }
+
+    fetchData();
+  };
+
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('now-live-engagement')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_lifts' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => fetchData())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   return (
     <div className="w-full min-h-screen bg-white flex justify-center">
 
@@ -203,7 +282,10 @@ export default function NowFeedPage() {
 
           const likeCount = getLikes(post.id).length;
           const commentCount = getComments(post.id).length;
+          const liftCount = getLifts(post.id).length;
           const liked = hasLiked(post.id);
+          const lifted = hasLifted(post.id);
+          const fromFollowed = followingIds.includes(post.user_id);
 
           return (
             <div
@@ -232,7 +314,7 @@ export default function NowFeedPage() {
               >
                 <div className="w-8 h-8 rounded-full bg-gray-300 overflow-hidden">
                   {userProfile?.avatar_url && (
-                    <img src={userProfile.avatar_url} className="w-full h-full object-cover" />
+                    <img src={userProfile.avatar_url} alt={`${userProfile.username || 'User'} avatar`} className="w-full h-full object-cover" />
                   )}
                 </div>
 
@@ -264,6 +346,11 @@ export default function NowFeedPage() {
                   {commentCount}
                 </button>
 
+                <button onClick={() => toggleLift(post.id)}>
+                  <span className={`text-2xl ${lifted ? 'text-cyan-300' : ''}`}>↻</span>
+                  {liftCount}
+                </button>
+
               </div>
 
               {/* TEXT STACK */}
@@ -277,6 +364,19 @@ export default function NowFeedPage() {
                 <div className="text-2xl font-extrabold leading-tight drop-shadow-lg">
                   {post.content}
                 </div>
+
+                {liftCount > 0 && (
+                  <div className="inline-flex items-center gap-2 text-[11px] text-cyan-200 bg-cyan-500/20 border border-cyan-300/25 px-2.5 py-1 rounded-full">
+                    Lifted by {liftCount} {liftCount === 1 ? 'user' : 'users'}
+                  </div>
+                )}
+
+                {fromFollowed && (
+                  <div className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-emerald-300">
+                    <span className="w-1 h-1 rounded-full bg-emerald-400" />
+                    From someone you follow
+                  </div>
+                )}
 
                 {post.track_name && (
                   <button
@@ -414,6 +514,7 @@ function MediaPlayer({
   return (
     <img
       src={src}
+      alt="Post media"
       className="absolute inset-0 w-full h-full object-contain"
     />
   );
