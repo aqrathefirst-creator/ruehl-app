@@ -1288,7 +1288,7 @@ export default function CreatePage() {
                     className="absolute inset-0 h-full w-full object-cover transition-transform duration-150"
                     autoPlay
                     playsInline
-                    muted={micDenied}
+                    muted
                     style={{ transform: zoomRange.max <= zoomRange.min ? `scale(${zoomLevel})` : 'scale(1)' }}
                   />
 

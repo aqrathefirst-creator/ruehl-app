@@ -140,51 +140,69 @@ const [suggestedSounds, setSuggestedSounds] = useState<any[]>([]);
   const fetchData = async () => {
     if (!currentUser) return;
 
-    const { data: postsData } = await supabase.from('posts').select('*');
-    const { data: profilesData } = await supabase.from('profiles').select('*');
-    const { data: commentsData } = await supabase.from('comments').select('*');
-    const { data: likesData } = await supabase.from('likes').select('*');
-    const { data: activityData } = await supabase
-      .from('user_activity')
-      .select('*')
-      .eq('user_id', currentUser.id);
+    // Run independent queries in parallel and limit result sizes for performance.
+    const [
+      { data: postsData },
+      { data: profilesData },
+      { data: commentsData },
+      { data: likesData },
+      { data: activityData },
+      { data: saved },
+      { data: trendingData },
+      { data: upcomingData },
+    ] = await Promise.all([
+      supabase
+        .from('posts')
+        .select('id, content, user_id, media_url, created_at, track_name, artist_name, sound_id')
+        .order('created_at', { ascending: false })
+        .limit(50),
+      supabase
+        .from('profiles')
+        .select('id, username, avatar_url, verified'),
+      supabase
+        .from('comments')
+        .select('id, content, user_id, post_id')
+        .order('created_at', { ascending: false })
+        .limit(200),
+      supabase
+        .from('likes')
+        .select('id, user_id, post_id'),
+      supabase
+        .from('user_activity')
+        .select('id, user_id, target_id, type')
+        .eq('user_id', currentUser.id),
+      supabase
+        .from('saved_sounds')
+        .select('sound_id')
+        .eq('user_id', currentUser.id),
+      supabase
+        .from('sounds')
+        .select('id, track_name, artist_name, thumbnail_url, bpm, preview_url')
+        .order('usage_count', { ascending: false })
+        .limit(10),
+      supabase
+        .from('sounds')
+        .select('id, track_name, artist_name, thumbnail_url, bpm, preview_url')
+        .order('created_at', { ascending: false })
+        .limit(10),
+    ]);
 
     setPosts(postsData || []);
     setProfiles(profilesData || []);
     setComments(commentsData || []);
     setLikes(likesData || []);
     setActivities(activityData || []);
-    // ✅ LOAD SAVED SOUNDS
-const { data: saved } = await supabase
-  .from('saved_sounds')
-  .select('sound_id')
-  .eq('user_id', currentUser.id);
-
-const ids = saved?.map(s => s.sound_id) || [];
-
-if (ids.length > 0) {
-  const { data: soundsData } = await supabase
-    .from('sounds')
-    .select('*')
-    .in('id', ids);
-
-  setSavedSounds(soundsData || []);
-}
-
-    const { data: trendingData } = await supabase
-      .from('sounds')
-      .select('*')
-      .order('usage_count', { ascending: false })
-      .limit(10);
-
-    const { data: upcomingData } = await supabase
-      .from('sounds')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(10);
-
     setTrendingTracks((trendingData as Sound[]) || []);
     setUpcomingTracks((upcomingData as Sound[]) || []);
+
+    const ids = saved?.map((s: { sound_id: string }) => s.sound_id) || [];
+    if (ids.length > 0) {
+      const { data: soundsData } = await supabase
+        .from('sounds')
+        .select('id, track_name, artist_name, thumbnail_url, bpm, preview_url')
+        .in('id', ids);
+      setSavedSounds(soundsData || []);
+    }
   };
 
   useEffect(() => {

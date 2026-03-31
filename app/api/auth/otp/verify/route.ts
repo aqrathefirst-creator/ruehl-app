@@ -84,9 +84,10 @@ export async function POST(request: Request) {
     if (verifyError) return jsonError(verifyError.message || 'Unable to verify account', 500);
 
     // Upsert profile using service role so username is always persisted, regardless of RLS.
+    // Only is_verified is set here — the `verified` badge is reserved for admin-awarded accounts.
     if (userId && username) {
       await supabase.from('profiles').upsert(
-        { id: userId, username, is_verified: true, verified: true },
+        { id: userId, username, is_verified: true },
         { onConflict: 'id' }
       );
     }
