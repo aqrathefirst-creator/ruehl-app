@@ -98,17 +98,63 @@ type VerificationRequest = {
   created_at: string;
 };
 
+type ContentFilter = 'all' | 'reported' | 'flagged' | 'shadow_banned' | 'restricted' | 'hidden' | 'removed';
+type ContentSort = 'recent' | 'engaged' | 'reported';
+type ContentViewMode = 'list' | 'grid';
+type VisibilityState = 'normal' | 'restricted' | 'hidden' | 'removed';
+
 type ContentItem = {
   id: string;
   user_id: string;
   content: string;
   media_url?: string | null;
+  thumbnail_url?: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
+  genre?: string | null;
+  hashtags?: string[] | null;
   created_at: string;
   hidden_by_admin?: boolean;
   discovery_disabled?: boolean;
   moderation_state?: string;
   visibility_state?: string;
+  boosted_until?: string | null;
   trending_override?: boolean;
+  shadow_banned?: boolean;
+  report_count?: number;
+  pending_report_count?: number;
+  status?: string;
+  auto_flagged?: boolean;
+  auto_flag_keywords?: string[];
+  engagement?: {
+    likes: number;
+    comments: number;
+    shares: number | null;
+  };
+};
+
+type ContentDetail = {
+  post: ContentItem & {
+    reports: {
+      total: number;
+      pending: number;
+      reasons: Record<string, number>;
+      reporters: Array<{
+        id: string;
+        username: string;
+        reason: string;
+        created_at: string;
+        status: string;
+      }>;
+    };
+  };
+  actions: Array<{
+    id: string;
+    admin_user_id: string;
+    action: string;
+    details?: Record<string, unknown>;
+    created_at: string;
+  }>;
 };
 
 type ReportItem = {
@@ -232,7 +278,13 @@ export default function AdminPage() {
 
   const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
 
-  const [contentFilter, setContentFilter] = useState<'all' | 'trending' | 'reported' | 'flagged'>('all');
+  const [contentFilter, setContentFilter] = useState<ContentFilter>('all');
+  const [contentSort, setContentSort] = useState<ContentSort>('recent');
+  const [contentViewMode, setContentViewMode] = useState<ContentViewMode>('list');
+  const [contentGenreFilter, setContentGenreFilter] = useState('');
+  const [contentDetailLoading, setContentDetailLoading] = useState(false);
+  const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
+  const [selectedContentDetail, setSelectedContentDetail] = useState<ContentDetail | null>(null);
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
 
   const [reportsFilter, setReportsFilter] = useState<'pending' | 'resolved' | 'dismissed' | 'all'>('pending');
@@ -331,8 +383,32 @@ export default function AdminPage() {
   };
 
   const loadContent = async () => {
-    const data = await withAdminFetch(`/api/admin/content?filter=${contentFilter}`);
+    const params = new URLSearchParams({
+      filter: contentFilter,
+      sort: contentSort,
+      page: '1',
+      pageSize: '60',
+    });
+
+    if (contentGenreFilter.trim()) {
+      params.set('genre', contentGenreFilter.trim());
+    }
+
+    const data = await withAdminFetch(`/api/admin/content?${params.toString()}`);
     setContentItems((data.items || []) as ContentItem[]);
+  };
+
+  const loadContentDetail = async (postId: string) => {
+    setContentDetailLoading(true);
+    try {
+      const data = await withAdminFetch(`/api/admin/content?postId=${encodeURIComponent(postId)}`);
+      setSelectedContentDetail(data as ContentDetail);
+    } catch (detailError: unknown) {
+      setSelectedContentDetail(null);
+      setError(detailError instanceof Error ? detailError.message : 'Unable to load content detail');
+    } finally {
+      setContentDetailLoading(false);
+    }
   };
 
   const loadReports = async () => {
@@ -412,13 +488,39 @@ export default function AdminPage() {
     };
 
     void loadSectionData();
-  }, [activeSection, authorized, contentFilter, musicQuery, reportsFilter, usersQuery]);
+  }, [activeSection, authorized, contentFilter, contentGenreFilter, contentSort, musicQuery, reportsFilter, usersQuery]);
 
   useEffect(() => {
     if (!selectedUserId || activeSection !== 'users') return;
     setSelectedUserDetail(null);
     void loadUserDetail(selectedUserId);
   }, [activeSection, selectedUserId]);
+
+  useEffect(() => {
+    if (!selectedContentId || activeSection !== 'content') return;
+    setSelectedContentDetail(null);
+    void loadContentDetail(selectedContentId);
+  }, [activeSection, selectedContentId]);
+
+  useEffect(() => {
+    if (activeSection !== 'content') return;
+
+    const channel = supabase
+      .channel('admin-content-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
+        void loadContent();
+        if (selectedContentId) void loadContentDetail(selectedContentId);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_reports' }, () => {
+        void loadContent();
+        if (selectedContentId) void loadContentDetail(selectedContentId);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeSection, selectedContentId, contentFilter, contentSort, contentGenreFilter]);
 
   const runUserAction = async (action: string, payload: Record<string, unknown> = {}) => {
     if (!selectedUserId) return;
@@ -485,17 +587,38 @@ export default function AdminPage() {
     }
   };
 
-  const runContentAction = async (postId: string, action: 'delete' | 'hide' | 'restrict' | 'mark_safe') => {
+  const runContentAction = async (
+    postId: string,
+    action:
+      | 'delete'
+      | 'hide'
+      | 'restrict'
+      | 'mark_safe'
+      | 'flag_manual'
+      | 'set_visibility'
+      | 'boost'
+      | 'remove_discovery'
+      | 'reduce_reach'
+      | 'force_now_feed'
+      | 'clear_override',
+    options?: {
+      visibility_state?: VisibilityState;
+      note?: string;
+    }
+  ) => {
     clearFeedback();
     setBusyAction(`${action}:${postId}`);
 
     try {
       await withAdminFetch('/api/admin/content', {
         method: 'PATCH',
-        body: JSON.stringify({ post_id: postId, action }),
+        body: JSON.stringify({ post_id: postId, action, ...options }),
       });
       setSuccess('Content updated.');
       await loadContent();
+      if (selectedContentId === postId) {
+        await loadContentDetail(postId);
+      }
     } catch (actionError: unknown) {
       setError(actionError instanceof Error ? actionError.message : 'Content action failed');
     } finally {
@@ -545,6 +668,18 @@ export default function AdminPage() {
     () => verificationRequests.filter((item) => item.status === 'pending'),
     [verificationRequests]
   );
+
+  const contentGenres = useMemo(() => {
+    return Array.from(new Set(contentItems.map((item) => item.genre).filter((value): value is string => Boolean(value)))).sort();
+  }, [contentItems]);
+
+  const getContentStatusPill = (status: string | undefined) => {
+    if (status === 'flagged') return 'border-amber-500/35 bg-amber-500/15 text-amber-200';
+    if (status === 'restricted') return 'border-orange-500/35 bg-orange-500/15 text-orange-200';
+    if (status === 'hidden') return 'border-red-500/35 bg-red-500/15 text-red-200';
+    if (status === 'removed') return 'border-red-600/45 bg-red-600/20 text-red-200';
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
+  };
 
   if (checkingAccess) return <div className="min-h-screen bg-black" />;
 
@@ -886,36 +1021,353 @@ export default function AdminPage() {
                   )}
 
                   {activeSection === 'content' && (
-                    <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
-                      <div className="flex flex-wrap gap-2">
-                        {(['all', 'trending', 'reported', 'flagged'] as const).map((filter) => (
-                          <button
-                            key={filter}
-                            onClick={() => setContentFilter(filter)}
-                            className={`px-3 py-1.5 rounded-full text-xs border ${
-                              contentFilter === filter
-                                ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-200'
-                                : 'bg-white/5 border-white/15 text-gray-300'
-                            }`}
+                    <section className="space-y-4">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
+                        <div className="text-xs uppercase tracking-[0.18em] text-gray-500">Content Moderation Center</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {([
+                            'all',
+                            'reported',
+                            'flagged',
+                            'shadow_banned',
+                            'restricted',
+                            'hidden',
+                            'removed',
+                          ] as const).map((filter) => (
+                            <button
+                              key={filter}
+                              onClick={() => setContentFilter(filter)}
+                              className={`px-3 py-1.5 rounded-full text-xs border ${
+                                contentFilter === filter
+                                  ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-200'
+                                  : 'bg-white/5 border-white/15 text-gray-300'
+                              }`}
+                            >
+                              {filter.replace('_', ' ')}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-[1fr_170px_170px_auto] gap-2">
+                          <select
+                            value={contentGenreFilter}
+                            onChange={(event) => setContentGenreFilter(event.target.value)}
+                            className="rounded-xl bg-black/50 border border-white/10 px-3 py-2 text-sm"
                           >
-                            {filter}
-                          </button>
-                        ))}
+                            <option value="">All genres</option>
+                            {contentGenres.map((genre) => (
+                              <option key={genre} value={genre}>
+                                {genre}
+                              </option>
+                            ))}
+                          </select>
+
+                          <select
+                            value={contentSort}
+                            onChange={(event) => setContentSort(event.target.value as ContentSort)}
+                            className="rounded-xl bg-black/50 border border-white/10 px-3 py-2 text-sm"
+                          >
+                            <option value="recent">Most recent</option>
+                            <option value="engaged">Most engaged</option>
+                            <option value="reported">Most reported</option>
+                          </select>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => setContentViewMode('list')}
+                              className={`rounded-xl px-3 py-2 text-xs border ${
+                                contentViewMode === 'list'
+                                  ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-200'
+                                  : 'bg-white/5 border-white/15 text-gray-300'
+                              }`}
+                            >
+                              List
+                            </button>
+                            <button
+                              onClick={() => setContentViewMode('grid')}
+                              className={`rounded-xl px-3 py-2 text-xs border ${
+                                contentViewMode === 'grid'
+                                  ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-200'
+                                  : 'bg-white/5 border-white/15 text-gray-300'
+                              }`}
+                            >
+                              Grid
+                            </button>
+                          </div>
+
+                          <div className="text-xs text-gray-400 flex items-center justify-end pr-2">
+                            {contentItems.length} posts
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="space-y-2">
-                        {contentItems.map((item) => (
-                          <div key={item.id} className="rounded-xl border border-white/10 bg-black/30 p-3">
-                            <div className="text-xs text-gray-500">{item.id}</div>
-                            <div className="text-sm text-gray-200 mt-1 line-clamp-2">{item.content || 'Media post'}</div>
-                            <div className="flex gap-2 mt-3">
-                              <button onClick={() => void runContentAction(item.id, 'hide')} className="px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/15 text-xs">Hide</button>
-                              <button onClick={() => void runContentAction(item.id, 'restrict')} className="px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/15 text-xs">Restrict</button>
-                              <button onClick={() => void runContentAction(item.id, 'mark_safe')} className="px-2.5 py-1.5 rounded-lg bg-green-500/15 border border-green-500/30 text-xs text-green-200">Mark Safe</button>
-                              <button onClick={() => void runContentAction(item.id, 'delete')} className="px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-xs text-red-200">Delete</button>
+                      <div className="grid grid-cols-1 xl:grid-cols-[1fr_430px] gap-4">
+                        <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+                          {contentItems.length === 0 ? (
+                            <div className="rounded-xl border border-white/10 bg-black/30 p-8 text-center text-sm text-gray-400">
+                              No posts found for this moderation query.
                             </div>
-                          </div>
-                        ))}
+                          ) : contentViewMode === 'grid' ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+                              {contentItems.map((item) => {
+                                const preview = item.thumbnail_url || item.media_url;
+                                const isVideo = Boolean(preview && /\.(mp4|webm|mov|m4v|avi)$/i.test(preview));
+                                const selected = selectedContentId === item.id;
+
+                                return (
+                                  <button
+                                    key={item.id}
+                                    onClick={() => {
+                                      setSelectedContentId(item.id);
+                                      setSelectedContentDetail(null);
+                                    }}
+                                    className={`rounded-2xl border text-left overflow-hidden transition ${
+                                      selected
+                                        ? 'border-cyan-500/40 bg-cyan-500/10'
+                                        : 'border-white/10 bg-black/30 hover:bg-white/[0.04]'
+                                    }`}
+                                  >
+                                    <div className="relative aspect-[9/16] bg-black/60">
+                                      {preview ? (
+                                        isVideo ? (
+                                          <video src={preview} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                                        ) : (
+                                          <img src={preview} alt="Post thumbnail" className="w-full h-full object-cover" />
+                                        )
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">No media</div>
+                                      )}
+                                      {(item.pending_report_count || 0) > 0 && (
+                                        <div className="absolute top-2 right-2 px-2 py-1 rounded-full text-[10px] bg-red-500/80 text-white font-semibold">
+                                          {item.pending_report_count} reports
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="p-3 space-y-1.5">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="text-sm font-semibold truncate">@{item.username || 'user'}</div>
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] border ${getContentStatusPill(item.status)}`}>
+                                          {item.status || 'normal'}
+                                        </span>
+                                      </div>
+                                      <div className="text-xs text-gray-400 truncate">{item.genre || 'Uncategorized'}</div>
+                                      <div className="text-xs text-gray-300 line-clamp-2">{item.content || 'Media post'}</div>
+                                      <div className="text-[11px] text-gray-500">
+                                        {new Date(item.created_at).toLocaleString()} • {(item.engagement?.likes || 0) + (item.engagement?.comments || 0)} eng.
+                                      </div>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {contentItems.map((item) => {
+                                const preview = item.thumbnail_url || item.media_url;
+                                const isVideo = Boolean(preview && /\.(mp4|webm|mov|m4v|avi)$/i.test(preview));
+                                const selected = selectedContentId === item.id;
+
+                                return (
+                                  <button
+                                    key={item.id}
+                                    onClick={() => {
+                                      setSelectedContentId(item.id);
+                                      setSelectedContentDetail(null);
+                                    }}
+                                    className={`w-full rounded-xl border p-3 text-left transition ${
+                                      selected
+                                        ? 'border-cyan-500/40 bg-cyan-500/10'
+                                        : 'border-white/10 bg-black/30 hover:bg-white/[0.04]'
+                                    }`}
+                                  >
+                                    <div className="grid grid-cols-[72px_1fr] gap-3">
+                                      <div className="w-[72px] h-[112px] rounded-lg overflow-hidden bg-black/60">
+                                        {preview ? (
+                                          isVideo ? (
+                                            <video src={preview} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                                          ) : (
+                                            <img src={preview} alt="Post thumbnail" className="w-full h-full object-cover" />
+                                          )
+                                        ) : (
+                                          <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-500">No media</div>
+                                        )}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <div className="text-sm font-semibold truncate">@{item.username || 'user'}</div>
+                                          <span className={`px-2 py-0.5 rounded-full text-[10px] border ${getContentStatusPill(item.status)}`}>
+                                            {item.status || 'normal'}
+                                          </span>
+                                        </div>
+                                        <div className="text-xs text-gray-500 mt-0.5">
+                                          {item.genre || 'Uncategorized'} • {new Date(item.created_at).toLocaleString()}
+                                        </div>
+                                        <div className="text-xs text-gray-300 mt-1.5 line-clamp-2">{item.content || 'Media post'}</div>
+                                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-400">
+                                          <span>Likes {item.engagement?.likes || 0}</span>
+                                          <span>Comments {item.engagement?.comments || 0}</span>
+                                          <span>Reports {item.report_count || 0}</span>
+                                          {(item.pending_report_count || 0) > 0 && <span className="text-red-300">Pending {item.pending_report_count}</span>}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </section>
+
+                        <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                          {!selectedContentId ? (
+                            <div className="text-sm text-gray-400">Select a post to open the moderation detail panel.</div>
+                          ) : contentDetailLoading ? (
+                            <div className="text-sm text-gray-400">Loading post detail...</div>
+                          ) : !selectedContentDetail?.post ? (
+                            <div className="text-sm text-red-300">Unable to load post detail. Try again.</div>
+                          ) : (
+                            <div className="space-y-4">
+                              <div className="rounded-xl border border-white/10 bg-black/40 overflow-hidden">
+                                <div className="aspect-[9/16] bg-black relative">
+                                  {selectedContentDetail.post.media_url ? (
+                                    /\.(mp4|webm|mov|m4v|avi)$/i.test(selectedContentDetail.post.media_url || '') ? (
+                                      <video
+                                        src={selectedContentDetail.post.media_url}
+                                        controls
+                                        playsInline
+                                        className="w-full h-full object-contain"
+                                      />
+                                    ) : (
+                                      <img
+                                        src={selectedContentDetail.post.media_url}
+                                        alt="Moderation preview"
+                                        className="w-full h-full object-contain"
+                                      />
+                                    )
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">No media available</div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="text-sm font-semibold">@{selectedContentDetail.post.username || 'user'}</div>
+                                  <span className={`px-2 py-1 rounded-full text-[10px] border ${getContentStatusPill(selectedContentDetail.post.status)}`}>
+                                    {selectedContentDetail.post.status || 'normal'}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">{new Date(selectedContentDetail.post.created_at).toLocaleString()}</div>
+                                <div className="text-sm text-gray-200 mt-2 whitespace-pre-wrap">{selectedContentDetail.post.content || 'Media post'}</div>
+                                <div className="text-xs text-gray-400 mt-2">Genre: {selectedContentDetail.post.genre || 'Uncategorized'}</div>
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {(selectedContentDetail.post.hashtags || []).slice(0, 8).map((tag) => (
+                                    <span key={tag} className="px-2 py-0.5 rounded-full text-[10px] bg-white/10 border border-white/10 text-gray-300">
+                                      #{tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-2">
+                                <div className="rounded-lg border border-white/10 bg-black/30 p-2.5 text-center">
+                                  <div className="text-lg font-semibold">{selectedContentDetail.post.engagement?.likes || 0}</div>
+                                  <div className="text-[10px] uppercase tracking-wider text-gray-500">Likes</div>
+                                </div>
+                                <div className="rounded-lg border border-white/10 bg-black/30 p-2.5 text-center">
+                                  <div className="text-lg font-semibold">{selectedContentDetail.post.engagement?.comments || 0}</div>
+                                  <div className="text-[10px] uppercase tracking-wider text-gray-500">Comments</div>
+                                </div>
+                                <div className="rounded-lg border border-white/10 bg-black/30 p-2.5 text-center">
+                                  <div className="text-lg font-semibold">{selectedContentDetail.post.reports.pending}</div>
+                                  <div className="text-[10px] uppercase tracking-wider text-gray-500">Pending Reports</div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-2">
+                                <div className="text-xs uppercase tracking-widest text-gray-500">Moderation actions</div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button onClick={() => void runContentAction(selectedContentDetail.post.id, 'flag_manual')} className="px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/35 text-xs text-amber-200">Flag manually</button>
+                                  <button onClick={() => void runContentAction(selectedContentDetail.post.id, 'mark_safe')} className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-xs text-emerald-200">Mark as safe</button>
+                                  <button onClick={() => void runContentAction(selectedContentDetail.post.id, 'hide')} className="px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/35 text-xs text-red-200">Hide post</button>
+                                  <button onClick={() => void runContentAction(selectedContentDetail.post.id, 'restrict')} className="px-3 py-2 rounded-lg bg-orange-500/15 border border-orange-500/35 text-xs text-orange-200">Restrict visibility</button>
+                                  <button
+                                    onClick={() => {
+                                      if (window.confirm('Permanently delete this post? This cannot be undone.')) {
+                                        void runContentAction(selectedContentDetail.post.id, 'delete');
+                                      }
+                                    }}
+                                    className="px-3 py-2 rounded-lg bg-red-600/20 border border-red-600/40 text-xs text-red-200 col-span-2"
+                                  >
+                                    Delete permanently
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-2">
+                                <div className="text-xs uppercase tracking-widest text-gray-500">Visibility control</div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {(['normal', 'restricted', 'hidden', 'removed'] as const).map((state) => (
+                                    <button
+                                      key={state}
+                                      onClick={() => void runContentAction(selectedContentDetail.post.id, 'set_visibility', { visibility_state: state })}
+                                      className="px-2.5 py-2 rounded-lg bg-white/10 border border-white/15 text-xs"
+                                    >
+                                      {state}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-2">
+                                <div className="text-xs uppercase tracking-widest text-gray-500">Algorithm controls</div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button onClick={() => void runContentAction(selectedContentDetail.post.id, 'boost')} className="px-2.5 py-2 rounded-lg bg-cyan-500/15 border border-cyan-500/35 text-xs text-cyan-200">Boost post</button>
+                                  <button onClick={() => void runContentAction(selectedContentDetail.post.id, 'remove_discovery')} className="px-2.5 py-2 rounded-lg bg-white/10 border border-white/15 text-xs">Remove discovery</button>
+                                  <button onClick={() => void runContentAction(selectedContentDetail.post.id, 'reduce_reach')} className="px-2.5 py-2 rounded-lg bg-white/10 border border-white/15 text-xs">Reduce reach</button>
+                                  <button onClick={() => void runContentAction(selectedContentDetail.post.id, 'force_now_feed')} className="px-2.5 py-2 rounded-lg bg-cyan-500/15 border border-cyan-500/35 text-xs text-cyan-200">Force Now feed</button>
+                                  <button onClick={() => void runContentAction(selectedContentDetail.post.id, 'clear_override')} className="px-2.5 py-2 rounded-lg bg-white/10 border border-white/15 text-xs col-span-2">Clear overrides</button>
+                                </div>
+                              </div>
+
+                              <div className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-2">
+                                <div className="text-xs uppercase tracking-widest text-gray-500">Reports</div>
+                                <div className="text-xs text-gray-400">Total reports: {selectedContentDetail.post.reports.total}</div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {Object.entries(selectedContentDetail.post.reports.reasons).map(([reason, count]) => (
+                                    <span key={reason} className="px-2 py-0.5 rounded-full text-[10px] bg-red-500/10 border border-red-500/20 text-red-200">
+                                      {reason} ({count})
+                                    </span>
+                                  ))}
+                                </div>
+                                <div className="space-y-1.5 max-h-28 overflow-y-auto">
+                                  {selectedContentDetail.post.reports.reporters.map((reporter) => (
+                                    <div key={`${reporter.id}-${reporter.created_at}`} className="text-xs text-gray-300 border border-white/10 rounded-lg p-2">
+                                      <div>{reporter.username} • {reporter.reason}</div>
+                                      <div className="text-[10px] text-gray-500 mt-1">{new Date(reporter.created_at).toLocaleString()} • {reporter.status}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-2">
+                                <div className="text-xs uppercase tracking-widest text-gray-500">Audit history</div>
+                                <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                                  {selectedContentDetail.actions.length === 0 ? (
+                                    <div className="text-xs text-gray-500">No moderation actions logged yet.</div>
+                                  ) : (
+                                    selectedContentDetail.actions.map((entry) => (
+                                      <div key={entry.id} className="text-xs text-gray-300 border border-white/10 rounded-lg p-2">
+                                        <div className="font-medium">{entry.action}</div>
+                                        <div className="text-[10px] text-gray-500 mt-1">{new Date(entry.created_at).toLocaleString()} • admin {entry.admin_user_id}</div>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </section>
                       </div>
                     </section>
                   )}
