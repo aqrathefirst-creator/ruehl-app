@@ -42,6 +42,12 @@ type Like = {
   post_id: string;
 };
 
+type Lift = {
+  id: string;
+  user_id: string;
+  post_id: string;
+};
+
 type Activity = {
   id: string;
   user_id: string;
@@ -68,6 +74,7 @@ export default function Home() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [likes, setLikes] = useState<Like[]>([]);
+  const [lifts, setLifts] = useState<Lift[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -146,6 +153,7 @@ const [suggestedSounds, setSuggestedSounds] = useState<any[]>([]);
       { data: profilesData },
       { data: commentsData },
       { data: likesData },
+      { data: liftsData },
       { data: activityData },
       { data: saved },
       { data: trendingData },
@@ -166,6 +174,9 @@ const [suggestedSounds, setSuggestedSounds] = useState<any[]>([]);
         .limit(200),
       supabase
         .from('likes')
+        .select('id, user_id, post_id'),
+      supabase
+        .from('post_lifts')
         .select('id, user_id, post_id'),
       supabase
         .from('user_activity')
@@ -191,6 +202,7 @@ const [suggestedSounds, setSuggestedSounds] = useState<any[]>([]);
     setProfiles(profilesData || []);
     setComments(commentsData || []);
     setLikes(likesData || []);
+    setLifts((liftsData as Lift[]) || []);
     setActivities(activityData || []);
     setTrendingTracks((trendingData as Sound[]) || []);
     setUpcomingTracks((upcomingData as Sound[]) || []);
@@ -211,8 +223,12 @@ const [suggestedSounds, setSuggestedSounds] = useState<any[]>([]);
 
   const getProfile = (id: string) => profiles.find(p => p.id === id);
   const getLikes = (postId: string) => likes.filter(l => l.post_id === postId);
+  const getLifts = (postId: string) => lifts.filter((l) => l.post_id === postId);
+  const getComments = (postId: string) => comments.filter((c) => c.post_id === postId);
   const hasLiked = (postId: string) =>
     likes.some(l => l.post_id === postId && l.user_id === currentUser?.id);
+  const hasLifted = (postId: string) =>
+    lifts.some((l) => l.post_id === postId && l.user_id === currentUser?.id);
 
   const moodMap: { [key: string]: string } = {
   gym: 'aggressive',
@@ -250,8 +266,9 @@ const fetchSuggestedSounds = async (mood: string) => {
   const getPostScore = (post: Post) => {
     const likeCount = likes.filter(l => l.post_id === post.id).length;
     const commentCount = comments.filter(c => c.post_id === post.id).length;
+    const liftCount = lifts.filter((l) => l.post_id === post.id).length;
 
-    let score = likeCount * 2 + commentCount * 3;
+    let score = likeCount * 2 + commentCount * 3 + liftCount * 5;
 
     if (post.created_at) {
       const createdMs = new Date(post.created_at).getTime();
@@ -418,6 +435,26 @@ const fetchSuggestedSounds = async (mood: string) => {
     fetchData();
   };
 
+  const toggleLift = async (post: Post) => {
+    if (!currentUser) return;
+
+    const existing = lifts.find(
+      (l) => l.post_id === post.id && l.user_id === currentUser.id
+    );
+
+    if (existing) {
+      await supabase.from('post_lifts').delete().eq('id', existing.id);
+    } else {
+      await supabase.from('post_lifts').insert({
+        user_id: currentUser.id,
+        post_id: post.id,
+      });
+      await track('lift', post.id);
+    }
+
+    fetchData();
+  };
+
   const handleDoubleTap = async (post: Post) => {
     if (!hasLiked(post.id)) {
       toggleLike(post);
@@ -429,10 +466,10 @@ const fetchSuggestedSounds = async (mood: string) => {
 
   const addComment = async (postId: string) => {
     const content = newComments[postId];
-    if (!content) return;
+    if (!content?.trim() || !currentUser) return;
 
     await supabase.from('comments').insert({
-      content,
+      content: content.trim(),
       user_id: currentUser.id,
       post_id: postId,
     });
@@ -779,31 +816,80 @@ const fetchSuggestedSounds = async (mood: string) => {
           onClick={() => setActivePowerPost(null)}
         >
           <div
-            className="w-full max-w-[400px] rounded-2xl border border-white/[0.08] bg-[#111] p-5"
+            className="w-full max-w-[400px] max-h-[85dvh] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <button
-                onClick={() => router.push(`/profile/${activePowerPost.user_id}`)}
-                className="text-[14px] font-semibold text-white active:text-purple-300 transition-colors"
-              >
-                @{getProfile(activePowerPost.user_id)?.username || 'user'}
-              </button>
-              <button
-                onClick={() => setActivePowerPost(null)}
-                className="w-8 h-8 rounded-full bg-white/10 text-white flex items-center justify-center text-lg active:scale-90 transition-transform"
-              >
-                ×
-              </button>
+            <div className="p-5 border-b border-white/[0.08]">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <button
+                  onClick={() => router.push(`/profile/${activePowerPost.user_id}`)}
+                  className="text-[14px] font-semibold text-white active:text-purple-300 transition-colors"
+                >
+                  @{getProfile(activePowerPost.user_id)?.username || 'user'}
+                </button>
+                <button
+                  onClick={() => setActivePowerPost(null)}
+                  className="w-8 h-8 rounded-full bg-white/10 text-white flex items-center justify-center text-lg active:scale-90 transition-transform"
+                >
+                  ×
+                </button>
+              </div>
+
+              <p className="text-white text-[16px] leading-relaxed">{activePowerPost.content}</p>
+
+              <div className="mt-5 flex items-center gap-2">
+                <button
+                  onClick={() => toggleLike(activePowerPost)}
+                  className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-[14px] text-white active:scale-95 transition-transform"
+                >
+                  <span className={hasLiked(activePowerPost.id) ? 'text-red-400' : ''}>{hasLiked(activePowerPost.id) ? '♥' : '♡'}</span>
+                  {getLikes(activePowerPost.id).length}
+                </button>
+
+                <button
+                  onClick={() => toggleLift(activePowerPost)}
+                  className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-[14px] text-white active:scale-95 transition-transform"
+                >
+                  <span className={hasLifted(activePowerPost.id) ? 'text-cyan-300' : ''}>↻</span>
+                  {getLifts(activePowerPost.id).length}
+                </button>
+
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-[14px] text-white">
+                  <span>💬</span>
+                  {getComments(activePowerPost.id).length}
+                </div>
+              </div>
             </div>
-            <p className="text-white text-[16px] leading-relaxed">{activePowerPost.content}</p>
-            <div className="mt-5">
+
+            <div className="max-h-[38dvh] overflow-y-auto p-4 space-y-3">
+              {getComments(activePowerPost.id).map((comment) => (
+                <div key={comment.id} className="rounded-xl bg-white/[0.05] border border-white/[0.08] p-3">
+                  <div className="text-[12px] text-gray-400">@{getProfile(comment.user_id)?.username || 'user'}</div>
+                  <div className="text-[14px] text-white mt-1">{comment.content}</div>
+                </div>
+              ))}
+              {getComments(activePowerPost.id).length === 0 && (
+                <div className="text-[13px] text-gray-500 text-center py-4">No comments yet.</div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-white/[0.08] flex items-center gap-2">
+              <input
+                value={newComments[activePowerPost.id] || ''}
+                onChange={(e) =>
+                  setNewComments((prev) => ({
+                    ...prev,
+                    [activePowerPost.id]: e.target.value,
+                  }))
+                }
+                placeholder="Add a comment..."
+                className="flex-1 h-11 rounded-xl bg-white/10 border border-white/20 px-3 text-sm text-white placeholder:text-gray-500 outline-none"
+              />
               <button
-                onClick={() => toggleLike(activePowerPost)}
-                className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-[14px] text-white active:scale-95 transition-transform"
+                onClick={() => addComment(activePowerPost.id)}
+                className="h-11 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold"
               >
-                <span className={hasLiked(activePowerPost.id) ? 'text-red-400' : ''}>{hasLiked(activePowerPost.id) ? '♥' : '♡'}</span>
-                {getLikes(activePowerPost.id).length}
+                Send
               </button>
             </div>
           </div>
