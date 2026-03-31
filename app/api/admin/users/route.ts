@@ -7,6 +7,8 @@ type AdminUserRow = {
   avatar_url: string | null;
   is_verified: boolean | null;
   is_admin: boolean | null;
+  shadow_banned: boolean | null;
+  suspended_until: string | null;
 };
 
 export async function GET(request: Request) {
@@ -32,7 +34,7 @@ export async function GET(request: Request) {
   const { data: profiles, error: profilesError } = userIds.length > 0
     ? await auth.admin
         .from('profiles')
-        .select('id, username, avatar_url, is_verified, is_admin')
+      .select('id, username, avatar_url, is_verified, is_admin, shadow_banned, suspended_until')
         .in('id', userIds)
     : { data: [] as AdminUserRow[], error: null };
 
@@ -50,6 +52,8 @@ export async function GET(request: Request) {
       avatar_url: profile?.avatar_url || null,
       is_verified: profile?.is_verified ?? false,
       is_admin: profile?.is_admin ?? false,
+      shadow_banned: profile?.shadow_banned ?? false,
+      suspended_until: profile?.suspended_until ?? null,
       created_at: user.created_at || null,
       last_sign_in_at: user.last_sign_in_at || null,
     };

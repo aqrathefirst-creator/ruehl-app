@@ -14,6 +14,8 @@ type Profile = {
   avatar_url?: string | null;
   verified?: boolean;
   activity_type?: string | null;
+  shadow_banned?: boolean;
+  suspended_until?: string | null;
 };
 
 type Post = {
@@ -26,6 +28,8 @@ type Post = {
   artist_name?: string | null;
   sound_id?: string | null;
   activity_type?: string | null;
+  hidden_by_admin?: boolean;
+  discovery_disabled?: boolean;
 };
 
 type Like = {
@@ -62,13 +66,37 @@ export default function NowFeedPage() {
     const { data: postsData } = await supabase
       .from('posts')
       .select('*')
-      .not('media_url', 'is', null);
+      .not('media_url', 'is', null)
+      .order('created_at', { ascending: false });
     const { data: profilesData } = await supabase.from('profiles').select('*');
     const { data: likesData } = await supabase.from('likes').select('*');
     const { data: commentsData } = await supabase.from('comments').select('*');
 
-    setPosts(postsData || []);
-    setProfiles(profilesData || []);
+    const nextProfiles = (profilesData || []) as Profile[];
+    const nextPosts = (postsData || []) as Post[];
+
+    const profileMap = new Map(nextProfiles.map((item) => [item.id, item]));
+    const ownId = user?.id || null;
+
+    const normalPosts = nextPosts.filter((post) => {
+      if (post.hidden_by_admin === true || post.discovery_disabled === true) return false;
+      if (post.user_id === ownId) return true;
+      const profile = profileMap.get(post.user_id);
+      return !profile?.shadow_banned;
+    });
+
+    // Reduced visibility: non-owner shadow banned content is heavily deprioritized.
+    const reducedShadowPosts = nextPosts
+      .filter((post) => {
+        if (post.hidden_by_admin === true || post.discovery_disabled === true) return false;
+        if (post.user_id === ownId) return false;
+        const profile = profileMap.get(post.user_id);
+        return !!profile?.shadow_banned;
+      })
+      .slice(0, 2);
+
+    setPosts([...normalPosts, ...reducedShadowPosts]);
+    setProfiles(nextProfiles);
     setLikes(likesData || []);
     setComments(commentsData || []);
   };

@@ -15,6 +15,8 @@ type Post = {
   user_id: string;
   media_url?: string | null;
   created_at?: string;
+  hidden_by_admin?: boolean;
+  discovery_disabled?: boolean;
 };
 
 type Profile = {
@@ -22,6 +24,8 @@ type Profile = {
   username: string;
   avatar_url: string | null;
   verified?: boolean;
+  shadow_banned?: boolean;
+  suspended_until?: string | null;
 };
 
 type Comment = {
@@ -72,8 +76,14 @@ export default function ExplorePage() {
     const { data: likesData } = await supabase.from('likes').select('*');
     const { data: followsData } = await supabase.from('follows').select('*');
 
-    setPosts(postsData || []);
-    setProfiles(profilesData || []);
+    const visibleProfiles = ((profilesData || []) as Profile[]).filter((item) => !item.shadow_banned);
+    const visibleProfileIds = new Set(visibleProfiles.map((item) => item.id));
+    const visiblePosts = ((postsData || []) as Post[]).filter(
+      (item) => visibleProfileIds.has(item.user_id) && item.hidden_by_admin !== true && item.discovery_disabled !== true
+    );
+
+    setPosts(visiblePosts);
+    setProfiles(visibleProfiles);
     setComments(commentsData || []);
     setLikes(likesData || []);
     setFollows(followsData || []);
