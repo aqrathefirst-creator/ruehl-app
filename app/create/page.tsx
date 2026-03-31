@@ -130,6 +130,7 @@ export default function CreatePage() {
   const [micDenied, setMicDenied] = useState(false);
   const [isMobileCapture, setIsMobileCapture] = useState(false);
   const [isLandscapeViewport, setIsLandscapeViewport] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState(0);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraFacing, setCameraFacing] = useState<FacingMode>('environment');
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -206,6 +207,21 @@ export default function CreatePage() {
     const offset = circumference - circumference * recordingProgress;
     return { radius, circumference, offset };
   }, [recordingProgress]);
+
+  const cameraUiLayout = useMemo(() => {
+    const vh = viewportHeight;
+    const compactViewport = vh > 0 && vh < 740;
+    const tallViewport = vh >= 920;
+
+    return {
+      topControlsPaddingTop: `calc(env(safe-area-inset-top) + ${compactViewport ? '0.5rem' : tallViewport ? '0.9rem' : '0.7rem'})`,
+      progressTop: `calc(env(safe-area-inset-top) + ${compactViewport ? '3.8rem' : tallViewport ? '4.5rem' : '4.2rem'})`,
+      helperTextBottom: `calc(env(safe-area-inset-bottom) + ${compactViewport ? '6.1rem' : tallViewport ? '7.4rem' : '6.8rem'})`,
+      micStatusBottom: `calc(env(safe-area-inset-bottom) + ${compactViewport ? '8.1rem' : tallViewport ? '9.3rem' : '8.7rem'})`,
+      controlsBottom: `calc(env(safe-area-inset-bottom) + ${compactViewport ? '0.55rem' : '0.9rem'})`,
+      mobileBadgeTop: `calc(env(safe-area-inset-top) + ${compactViewport ? '5.2rem' : '5.8rem'})`,
+    };
+  }, [viewportHeight]);
 
   const editorToolbar = useMemo(
     () => [
@@ -665,15 +681,18 @@ export default function CreatePage() {
     const updateViewportOrientation = () => {
       const landscape = window.matchMedia('(orientation: landscape)').matches;
       setIsLandscapeViewport(landscape);
+      setViewportHeight(Math.round(window.visualViewport?.height || window.innerHeight));
     };
 
     updateViewportOrientation();
     window.addEventListener('resize', updateViewportOrientation);
     window.addEventListener('orientationchange', updateViewportOrientation);
+    window.visualViewport?.addEventListener('resize', updateViewportOrientation);
 
     return () => {
       window.removeEventListener('resize', updateViewportOrientation);
       window.removeEventListener('orientationchange', updateViewportOrientation);
+      window.visualViewport?.removeEventListener('resize', updateViewportOrientation);
     };
   }, []);
 
@@ -1583,7 +1602,7 @@ export default function CreatePage() {
           <>
             <div
               className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-4 pb-3"
-              style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
+              style={{ paddingTop: cameraUiLayout.topControlsPaddingTop }}
             >
               <button
                 onClick={() => router.back()}
@@ -1643,7 +1662,7 @@ export default function CreatePage() {
 
                 <div
                   className="absolute left-4 right-4 z-30"
-                  style={{ top: 'calc(env(safe-area-inset-top) + 4.2rem)' }}
+                  style={{ top: cameraUiLayout.progressTop }}
                 >
                   <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
                     <div
@@ -1667,7 +1686,7 @@ export default function CreatePage() {
 
                 <div
                   className="absolute left-0 right-0 z-30 text-center text-xs text-white/80"
-                  style={{ bottom: 'calc(env(safe-area-inset-bottom) + 7.25rem)' }}
+                  style={{ bottom: cameraUiLayout.helperTextBottom }}
                 >
                   {isMobileCapture
                     ? 'Tap photo. Hold to record vertical clips. Swipe up for gallery.'
@@ -1677,7 +1696,7 @@ export default function CreatePage() {
                 {isMobileCapture && (
                   <div
                     className="absolute left-1/2 -translate-x-1/2 z-30 rounded-full bg-black/55 border border-white/15 px-3 py-1 text-[11px] text-white/85"
-                    style={{ top: 'calc(env(safe-area-inset-top) + 5.8rem)' }}
+                    style={{ top: cameraUiLayout.mobileBadgeTop }}
                   >
                     Mobile 9:16 capture active
                   </div>
@@ -1686,7 +1705,7 @@ export default function CreatePage() {
                 {micDenied && (
                   <div
                     className="absolute left-1/2 -translate-x-1/2 z-30 rounded-full bg-black/55 border border-white/15 px-3 py-1 text-[11px] text-white/85"
-                    style={{ bottom: 'calc(env(safe-area-inset-bottom) + 9rem)' }}
+                    style={{ bottom: cameraUiLayout.micStatusBottom }}
                   >
                     Microphone denied. Video records without audio.
                   </div>
@@ -1694,7 +1713,7 @@ export default function CreatePage() {
 
                 <div
                   className="absolute left-0 right-0 z-30 h-24"
-                  style={{ bottom: 'calc(env(safe-area-inset-bottom) + 0.9rem)' }}
+                  style={{ bottom: cameraUiLayout.controlsBottom }}
                 >
                   <button
                     type="button"
