@@ -1,5 +1,4 @@
 import { supabase } from '@/lib/supabase';
-import { getAuthRedirectUrl } from '@/lib/authRedirect';
 
 export type PendingVerification = {
   method: 'email' | 'phone';
@@ -56,22 +55,16 @@ export function getVerificationCooldownSeconds(now = Date.now()) {
 }
 
 export async function sendVerificationCode(pending: PendingVerification) {
-  const emailRedirectTo = getAuthRedirectUrl('/verify-account');
-  const authApi = supabase.auth as any;
-
   if (pending.method === 'email') {
-    if (typeof authApi.resend !== 'function') {
-      throw new Error('Email verification resend is unavailable. Please refresh and try again.');
-    }
-
-    const { error } = await authApi.resend({
-      type: 'signup',
-      email: pending.value,
-      ...(emailRedirectTo ? { options: { emailRedirectTo } } : {}),
+    const response = await fetch('/api/auth/otp/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: pending.value }),
     });
 
-    if (error) {
-      throw error;
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(payload?.error || 'Unable to send verification code.');
     }
 
     markVerificationCodeSent();

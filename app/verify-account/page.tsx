@@ -164,15 +164,15 @@ export default function VerifyAccountPage() {
     try {
       const authApi = supabase.auth as any;
       if (pending.method === 'email') {
-        const emailPayload = { email: pending.value, token: code.trim(), type: 'email' as const };
-        const { error: emailVerifyError } = await authApi.verifyOtp(emailPayload);
+        const response = await fetch('/api/auth/otp/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: pending.value, code: code.trim() }),
+        });
 
-        if (emailVerifyError) {
-          const signupPayload = { email: pending.value, token: code.trim(), type: 'signup' as const };
-          const { error: signupVerifyError } = await authApi.verifyOtp(signupPayload);
-          if (signupVerifyError) {
-            throw signupVerifyError;
-          }
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(payload?.error || 'Unable to verify code.');
         }
       } else {
         const phonePayload = { phone: pending.value, token: code.trim(), type: 'sms' as const };
@@ -180,12 +180,14 @@ export default function VerifyAccountPage() {
         if (phoneVerifyError) {
           throw phoneVerifyError;
         }
-      }
 
-      await markProfileVerified();
+        await markProfileVerified();
+      }
       clearPendingVerification();
       setMessage('Account verified successfully.');
-      router.replace('/');
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      router.replace(sessionData.session ? '/' : '/login');
     } catch (verifyError: unknown) {
       if (verifyError instanceof Error) {
         setError(verifyError.message || 'Unable to verify code.');

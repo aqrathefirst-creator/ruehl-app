@@ -4,9 +4,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { getAuthRedirectUrl } from '@/lib/authRedirect';
 import {
-  markVerificationCodeSent,
   savePendingVerification,
   sendVerificationCode,
 } from '@/lib/authVerification';
@@ -232,7 +230,6 @@ export default function LoginPage() {
     try {
       let authError: any = null;
       let createdUser: any = null;
-      const emailRedirectTo = getAuthRedirectUrl('/verify-account');
 
       if (signupMethod === 'email') {
         const { data, error: signUpError } = await supabase.auth.signUp({
@@ -240,7 +237,6 @@ export default function LoginPage() {
           password: signupPassword,
           options: {
             data: { username: username.trim() },
-            ...(emailRedirectTo ? { emailRedirectTo } : {}),
           },
         });
         authError = signUpError;
@@ -285,17 +281,12 @@ export default function LoginPage() {
         username: username.trim(),
       });
 
-      if (signupMethod === 'email') {
-        // Signup already dispatches the first verification email.
-        markVerificationCodeSent();
-      } else {
-        await sendVerificationCode({
-          method: 'phone',
-          value: signupIdentifier.trim().startsWith('+')
-            ? signupIdentifier.trim()
-            : `+${signupIdentifier.trim()}`,
-        });
-      }
+      await sendVerificationCode({
+        method: signupMethod === 'email' ? 'email' : 'phone',
+        value: signupMethod === 'email'
+          ? signupIdentifier.trim().toLowerCase()
+          : (signupIdentifier.trim().startsWith('+') ? signupIdentifier.trim() : `+${signupIdentifier.trim()}`),
+      });
 
       setMessage('Account created. Enter the verification code we sent you.');
       router.replace('/verify-account');
