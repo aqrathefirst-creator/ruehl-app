@@ -322,33 +322,72 @@ export default function CreatePage() {
     }
   };
 
-  const startCameraStream = async (facing: FacingMode, withAudio: boolean) => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: facing,
-        width: { ideal: 1080 },
-        height: { ideal: 1920 },
-        aspectRatio: { ideal: 9 / 16 },
-        frameRate: { ideal: 30, max: 30 },
-      },
-      audio: withAudio
-        ? {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            channelCount: 1,
-          }
-        : false,
+  const attachStreamToPreview = async (stream: MediaStream) => {
+    const video = cameraVideoRef.current;
+    if (!video) return;
+
+    video.srcObject = stream;
+
+    // Wait for metadata before attempting playback so videoWidth/videoHeight are available.
+    await new Promise<void>((resolve) => {
+      if (video.readyState >= 1) {
+        resolve();
+        return;
+      }
+
+      const onLoaded = () => {
+        video.removeEventListener('loadedmetadata', onLoaded);
+        resolve();
+      };
+
+      video.addEventListener('loadedmetadata', onLoaded, { once: true });
+      window.setTimeout(() => {
+        video.removeEventListener('loadedmetadata', onLoaded);
+        resolve();
+      }, 1200);
     });
+
+    await video.play().catch(() => undefined);
+  };
+
+  const startCameraStream = async (facing: FacingMode, withAudio: boolean) => {
+    const audioConstraints = withAudio
+      ? {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        }
+      : false;
+
+    const getVideoConstraints = (mode: FacingMode) => ({
+      facingMode: { ideal: mode },
+      width: { ideal: 1080 },
+      height: { ideal: 1920 },
+      aspectRatio: { ideal: 9 / 16 },
+      frameRate: { ideal: 30, max: 30 },
+    });
+
+    let stream: MediaStream;
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: getVideoConstraints(facing),
+        audio: audioConstraints,
+      });
+    } catch {
+      const fallbackFacing: FacingMode = facing === 'user' ? 'environment' : 'user';
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: getVideoConstraints(fallbackFacing),
+        audio: audioConstraints,
+      });
+      setCameraFacing(fallbackFacing);
+    }
 
     stopCameraStream();
     cameraStreamRef.current = stream;
     await configureVideoTrack(stream).catch(() => undefined);
-
-    if (cameraVideoRef.current) {
-      cameraVideoRef.current.srcObject = stream;
-      await cameraVideoRef.current.play().catch(() => undefined);
-    }
+    await attachStreamToPreview(stream);
   };
 
   const initializePermissions = async () => {
@@ -490,15 +529,14 @@ export default function CreatePage() {
   // The <video> is only rendered when !requestingPermissions, so cameraVideoRef is null
   // during initializePermissions(). This effect runs when the video element becomes available.
   useEffect(() => {
-    if (requestingPermissions) return;
-    const video = cameraVideoRef.current;
+    if (requestingPermissions || view !== 'camera') return;
     const stream = cameraStreamRef.current;
+    const video = cameraVideoRef.current;
     if (!video || !stream) return;
     if (video.srcObject !== stream) {
-      video.srcObject = stream;
-      video.play().catch(() => undefined);
+      void attachStreamToPreview(stream);
     }
-  }, [requestingPermissions]);
+  }, [requestingPermissions, view]);
 
   useEffect(() => {
     void initializePermissions();
