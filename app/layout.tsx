@@ -23,6 +23,7 @@ export default function RootLayout({
 
   const isPublicPage = PUBLIC_PATHS.has(pathname || '');
   const isCreateRoute = (pathname || '').startsWith('/create');
+  const isAdminRoute = (pathname || '').startsWith('/admin');
 
   useEffect(() => {
     let mounted = true;
@@ -118,7 +119,7 @@ export default function RootLayout({
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
 
-  const showNav = isAuthenticated && isVerified && !isPublicPage && !isCreateRoute;
+  const showNav = isAuthenticated && isVerified && !isPublicPage && !isCreateRoute && !isAdminRoute;
 
   return (
     <html lang="en">
