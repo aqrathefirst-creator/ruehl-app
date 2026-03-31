@@ -91,6 +91,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     days?: number;
     note?: string;
     confirm?: string;
+    reset_email?: string;
   } | null;
 
   const action = body?.action;
@@ -126,13 +127,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const userResult = await auth.admin.auth.admin.getUserById(userId);
     if (userResult.error) return jsonError(userResult.error.message, 400);
 
-    const email = userResult.data.user?.email;
-    if (!email) return jsonError('Target user has no email for password reset', 400);
+    const email = userResult.data.user?.email?.trim().toLowerCase();
+    const overrideEmail = body?.reset_email?.trim().toLowerCase();
+    const targetEmail = overrideEmail || email;
 
-    const linkResult = await auth.admin.auth.admin.generateLink({ type: 'recovery', email });
-    if (linkResult.error) return jsonError(linkResult.error.message, 400);
+    if (!targetEmail) return jsonError('Target user has no email for password reset', 400);
+    if (!targetEmail.includes('@')) return jsonError('Invalid reset email', 400);
 
-    return jsonOk({ success: true, reset_link: linkResult.data.properties?.action_link || null });
+    const appBaseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
+    const { error: resetError } = await auth.admin.auth.resetPasswordForEmail(targetEmail, {
+      redirectTo: `${appBaseUrl}/reset-password`,
+    });
+
+    if (resetError) return jsonError(resetError.message, 400);
+
+    return jsonOk({ success: true, email: targetEmail });
   }
 
   if (action === 'add_note') {

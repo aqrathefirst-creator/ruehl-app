@@ -533,8 +533,8 @@ export default function AdminPage() {
         body: JSON.stringify({ action, ...payload }),
       });
 
-      if (action === 'reset_password' && data?.reset_link) {
-        setSuccess(`Password reset link generated: ${data.reset_link}`);
+      if (action === 'reset_password') {
+        setSuccess(`Reset link sent to ${data?.email || 'the selected address'}.`);
       } else {
         setSuccess('User action completed.');
       }
@@ -565,6 +565,30 @@ export default function AdminPage() {
     } finally {
       setBusyAction(null);
     }
+  };
+
+  const sendPasswordResetFromAdmin = async () => {
+    if (!selectedUserDetail) return;
+
+    clearFeedback();
+
+    const option = window.prompt('Password reset: type 1 to send to registered email, or 2 to enter another email.', '1');
+    if (!option) return;
+
+    if (option.trim() === '1') {
+      await runUserAction('reset_password');
+      return;
+    }
+
+    if (option.trim() === '2') {
+      const fallbackEmail = selectedUserDetail.user?.email || '';
+      const manualEmail = window.prompt('Enter email address for password reset link:', fallbackEmail);
+      if (!manualEmail?.trim()) return;
+      await runUserAction('reset_password', { reset_email: manualEmail.trim() });
+      return;
+    }
+
+    setError('Reset cancelled. Enter 1 or 2 when prompted.');
   };
 
   const runVerificationAction = async (request: VerificationRequest, status: 'approved' | 'rejected') => {
@@ -877,7 +901,7 @@ export default function AdminPage() {
                                 Lift Suspension
                               </button>
                               <button
-                                onClick={() => void runUserAction('reset_password')}
+                                onClick={() => void sendPasswordResetFromAdmin()}
                                 disabled={busyAction !== null}
                                 className="px-3 py-2 rounded-lg bg-white/10 border border-white/15 text-xs"
                               >
