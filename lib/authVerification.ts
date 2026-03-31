@@ -64,7 +64,7 @@ export async function sendVerificationCode(pending: PendingVerification) {
 
     if (!response.ok) {
       const raw = await response.text();
-      let message = 'Unable to send verification code.';
+      let message = `Unable to send verification code (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}).`;
 
       if (raw) {
         try {
