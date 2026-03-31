@@ -1,13 +1,10 @@
 import { createHmac, randomInt } from 'crypto';
 import { createServiceRoleSupabase } from '@/lib/server/supabase';
 import { jsonError, jsonOk } from '@/lib/server/responses';
+import { resolveOtpSecret } from '@/lib/server/otp';
 
 const OTP_EXPIRY_SECONDS = 10 * 60;
 const OTP_RESEND_SECONDS = 60;
-
-function getOtpSecret() {
-  return process.env.OTP_SIGNING_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
-}
 
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
@@ -65,8 +62,7 @@ export async function POST(request: Request) {
   const email = normalizeEmail(rawEmail);
   if (!isValidEmail(email)) return jsonError('Invalid email address', 400);
 
-  const secret = getOtpSecret();
-  if (!secret) return jsonError('OTP secret is missing', 500);
+  const secret = resolveOtpSecret();
 
   const supabase = createServiceRoleSupabase();
   const now = Date.now();

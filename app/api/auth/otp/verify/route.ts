@@ -1,12 +1,9 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import { createServiceRoleSupabase } from '@/lib/server/supabase';
 import { jsonError, jsonOk } from '@/lib/server/responses';
+import { resolveOtpSecret } from '@/lib/server/otp';
 
 const MAX_ATTEMPTS = 5;
-
-function getOtpSecret() {
-  return process.env.OTP_SIGNING_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
-}
 
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
@@ -38,8 +35,7 @@ export async function POST(request: Request) {
   if (!/^\d{6}$/.test(code)) return jsonError('Code must be 6 digits', 400);
 
   const email = normalizeEmail(rawEmail);
-  const secret = getOtpSecret();
-  if (!secret) return jsonError('OTP secret is missing', 500);
+  const secret = resolveOtpSecret();
 
   const supabase = createServiceRoleSupabase();
 
