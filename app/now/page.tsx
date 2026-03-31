@@ -4,7 +4,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@/lib/useUser';
 import VerificationBadge from '@/components/VerificationBadge';
 
@@ -69,6 +69,9 @@ export default function NowFeedPage() {
   const [newComment, setNewComment] = useState('');
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const postRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const handledDeepLinkRef = useRef<string | null>(null);
 
   const fetchData = async () => {
     const [{ data: postsData }, { data: profilesData }, { data: likesData }, { data: commentsData }, { data: liftsData }, { data: followingData }] = await Promise.all([
@@ -272,6 +275,29 @@ export default function NowFeedPage() {
     };
   }, [user]);
 
+  useEffect(() => {
+    const targetPostId = searchParams.get('post');
+    if (!targetPostId || handledDeepLinkRef.current === targetPostId) return;
+
+    const targetPost = posts.find((post) => post.id === targetPostId);
+    if (!targetPost) return;
+
+    handledDeepLinkRef.current = targetPostId;
+    postRefs.current[targetPostId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    if (searchParams.get('comments') === '1') {
+      setActiveCommentsPost(targetPostId);
+    }
+  }, [posts, searchParams]);
+
+  const closeComments = () => {
+    setActiveCommentsPost(null);
+
+    if (searchParams.get('post')) {
+      router.replace('/now');
+    }
+  };
+
   return (
     <div className="w-full min-h-screen bg-white flex justify-center">
 
@@ -290,6 +316,9 @@ export default function NowFeedPage() {
           return (
             <div
               key={post.id}
+              ref={(node) => {
+                postRefs.current[post.id] = node;
+              }}
               className="h-[100dvh] w-full snap-start relative bg-black flex items-center justify-center"
               onDoubleClick={() => handleDoubleTap(post.id)}
             >
@@ -443,7 +472,7 @@ export default function NowFeedPage() {
               </div>
 
               <button
-                onClick={() => setActiveCommentsPost(null)}
+                onClick={closeComments}
                 className="absolute top-4 right-4 w-8 h-8 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20 active:bg-white/30 transition-colors"
               >
                 ✕

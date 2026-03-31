@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase, uploadPostMedia, processMedia } from '@/lib/supabase';
 import { startCreateUpload } from '@/lib/createUploadQueue';
+import { clearPrewarmedCameraStream, hasPrewarmedCameraStream, prewarmCameraStream, takePrewarmedCameraStream } from '@/lib/cameraSession';
 
 type CreateView = 'camera' | 'gallery' | 'editor';
 type FacingMode = 'user' | 'environment';
@@ -132,9 +133,12 @@ export default function CreatePage() {
   const [isMobileCapture, setIsMobileCapture] = useState(false);
   const [isLandscapeViewport, setIsLandscapeViewport] = useState(false);
   const [viewportHeight, setViewportHeight] = useState(0);
+  const [viewportWidth, setViewportWidth] = useState(0);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraFacing, setCameraFacing] = useState<FacingMode>('user');
-  const [frontMirrorEnabled, setFrontMirrorEnabled] = useState(true);
+  const [flashEnabled, setFlashEnabled] = useState(false);
+  const [flashSupported, setFlashSupported] = useState(false);
+  const [screenFlashActive, setScreenFlashActive] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1 });
   const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
@@ -176,6 +180,7 @@ export default function CreatePage() {
   const soundPreviewRef = useRef<HTMLAudioElement | null>(null);
 
   const cameraStreamRef = useRef<MediaStream | null>(null);
+  const microphoneStreamRef = useRef<MediaStream | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -192,6 +197,7 @@ export default function CreatePage() {
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const microphoneAllowedRef = useRef(false);
   const pinchRef = useRef<{ distance: number; zoom: number } | null>(null);
+  const previewTapAtRef = useRef(0);
 
   const dragStateRef = useRef<{
     id: string;
@@ -207,8 +213,8 @@ export default function CreatePage() {
   }, [selectedFilter]);
 
   const previewMirrored = useMemo(() => {
-    return cameraFacing === 'user' && frontMirrorEnabled;
-  }, [cameraFacing, frontMirrorEnabled]);
+    return cameraFacing === 'user';
+  }, [cameraFacing]);
 
   const progressCircle = useMemo(() => {
     const radius = 34;
@@ -231,6 +237,18 @@ export default function CreatePage() {
       mobileBadgeTop: `calc(env(safe-area-inset-top) + ${compactViewport ? '5.2rem' : '5.8rem'})`,
     };
   }, [viewportHeight]);
+
+  const cameraFrame = useMemo(() => {
+    const availableWidth = Math.max(260, (viewportWidth || 390) - 24);
+    const availableHeight = Math.max(420, (viewportHeight || 780) - 220);
+    const width = Math.min(availableWidth, availableHeight * (9 / 16));
+    const height = width * (16 / 9);
+
+    return {
+      width,
+      height,
+    };
+  }, [viewportHeight, viewportWidth]);
 
   const editorToolbar = useMemo(
     () => [
@@ -295,6 +313,12 @@ export default function CreatePage() {
     recordingStreamRef.current = null;
   };
 
+  const stopMicrophoneStream = () => {
+    if (!microphoneStreamRef.current) return;
+    microphoneStreamRef.current.getTracks().forEach((track) => track.stop());
+    microphoneStreamRef.current = null;
+  };
+
   const stopCameraStream = () => {
     setCameraReady(false);
     stopPreviewRenderLoop();
@@ -302,6 +326,22 @@ export default function CreatePage() {
     if (!cameraStreamRef.current) return;
     cameraStreamRef.current.getTracks().forEach((track) => track.stop());
     cameraStreamRef.current = null;
+  };
+
+  const applyTorch = async (enabled: boolean) => {
+    const track = cameraStreamRef.current?.getVideoTracks()?.[0];
+    if (!track || !flashSupported) {
+      if (!enabled) setScreenFlashActive(false);
+      return;
+    }
+
+    await track
+      .applyConstraints({ advanced: [{ torch: enabled } as unknown as MediaTrackConstraintSet] })
+      .catch(() => undefined);
+
+    if (!enabled) {
+      setScreenFlashActive(false);
+    }
   };
 
   const lockPortraitOrientation = async () => {
@@ -415,8 +455,17 @@ export default function CreatePage() {
           exposureCompensation?: { min?: number; max?: number } | number;
           exposureMode?: string[];
           whiteBalanceMode?: string[];
+          torch?: boolean;
         })
       : null;
+
+    const supportsTorch = Boolean(capabilities && 'torch' in capabilities && capabilities.torch);
+    setFlashSupported(supportsTorch);
+
+    if (!supportsTorch) {
+      setFlashEnabled(false);
+      setScreenFlashActive(false);
+    }
 
     const nextMinZoom = capabilities && 'zoom' in capabilities && typeof capabilities.zoom === 'object'
       ? capabilities.zoom?.min || 1
@@ -516,17 +565,8 @@ export default function CreatePage() {
     }
   };
 
-  const startCameraStream = async (facing: FacingMode, withAudio: boolean) => {
+  const startCameraStream = async (facing: FacingMode) => {
     setCameraReady(false);
-
-    const audioConstraints = withAudio
-      ? {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1,
-        }
-      : false;
 
     const getVideoConstraints = (mode: FacingMode) =>
       isMobileCapture
@@ -547,16 +587,26 @@ export default function CreatePage() {
 
     let stream: MediaStream;
 
+    const prewarmed = takePrewarmedCameraStream(facing);
+
+    if (prewarmed) {
+      stopCameraStream();
+      cameraStreamRef.current = prewarmed;
+      await configureVideoTrack(prewarmed).catch(() => undefined);
+      await attachStreamToPreview(prewarmed);
+      return;
+    }
+
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: getVideoConstraints(facing),
-        audio: audioConstraints,
+        audio: false,
       });
     } catch {
       const fallbackFacing: FacingMode = facing === 'user' ? 'environment' : 'user';
       stream = await navigator.mediaDevices.getUserMedia({
         video: getVideoConstraints(fallbackFacing),
-        audio: audioConstraints,
+        audio: false,
       });
       setCameraFacing(fallbackFacing);
     }
@@ -565,6 +615,29 @@ export default function CreatePage() {
     cameraStreamRef.current = stream;
     await configureVideoTrack(stream).catch(() => undefined);
     await attachStreamToPreview(stream);
+  };
+
+  const requestMicrophoneAccess = async () => {
+    try {
+      stopMicrophoneStream();
+
+      const micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        },
+      });
+
+      microphoneStreamRef.current = micStream;
+      microphoneAllowedRef.current = true;
+      setMicDenied(false);
+    } catch {
+      stopMicrophoneStream();
+      microphoneAllowedRef.current = false;
+      setMicDenied(true);
+    }
   };
 
   const initializePermissions = async () => {
@@ -577,12 +650,13 @@ export default function CreatePage() {
       return;
     }
 
-    setRequestingPermissions(true);
+    setRequestingPermissions(!hasPrewarmedCameraStream(cameraFacing));
     await lockPortraitOrientation();
 
     try {
-      await startCameraStream(cameraFacing, false);
+      await startCameraStream(cameraFacing);
       setCameraDenied(false);
+      setRequestingPermissions(false);
     } catch {
       setCameraDenied(true);
       setMicDenied(true);
@@ -591,33 +665,11 @@ export default function CreatePage() {
       return;
     }
 
-    try {
-      const micStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1,
-        },
-      });
-      micStream.getTracks().forEach((track) => track.stop());
-      microphoneAllowedRef.current = true;
-      setMicDenied(false);
-    } catch {
-      microphoneAllowedRef.current = false;
-      setMicDenied(true);
-    }
-
-    if (microphoneAllowedRef.current) {
-      try {
-        await startCameraStream(cameraFacing, true);
-      } catch {
-        setMicDenied(true);
+    void requestMicrophoneAccess().then(() => {
+      if (!microphoneAllowedRef.current) {
         setError('Microphone is unavailable. Video will be captured without audio.');
       }
-    }
-
-    setRequestingPermissions(false);
+    });
   };
 
   const setSelectedFromFile = (file: File) => {
@@ -648,6 +700,14 @@ export default function CreatePage() {
 
   const handlePreviewTap = async (event: React.PointerEvent<HTMLDivElement>) => {
     if (view !== 'camera' || cameraDenied || requestingPermissions) return;
+
+    const now = Date.now();
+    if (now - previewTapAtRef.current < 260) {
+      previewTapAtRef.current = 0;
+      await flipCamera();
+      return;
+    }
+    previewTapAtRef.current = now;
 
     const rect = event.currentTarget.getBoundingClientRect();
     const x = ((event.clientX - rect.left) / rect.width) * 100;
@@ -711,6 +771,7 @@ export default function CreatePage() {
       const landscape = window.matchMedia('(orientation: landscape)').matches;
       setIsLandscapeViewport(landscape);
       setViewportHeight(Math.round(window.visualViewport?.height || window.innerHeight));
+      setViewportWidth(Math.round(window.visualViewport?.width || window.innerWidth));
     };
 
     updateViewportOrientation();
@@ -724,6 +785,11 @@ export default function CreatePage() {
       window.visualViewport?.removeEventListener('resize', updateViewportOrientation);
     };
   }, []);
+
+  useEffect(() => {
+    if (isPowr) return;
+    void prewarmCameraStream('user');
+  }, [isPowr]);
 
   useEffect(() => {
     const shouldLockScroll = view === 'camera';
@@ -763,7 +829,9 @@ export default function CreatePage() {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
       }
+      stopMicrophoneStream();
       stopCameraStream();
+      clearPrewarmedCameraStream();
       revokeSelectedMediaUrl();
       revokeGalleryUrls();
       revokeTrimmedUrl();
@@ -874,16 +942,20 @@ export default function CreatePage() {
 
   const buildRecordingStream = () => {
     if (!cameraStreamRef.current) return null;
-    if (!isMobileCapture) return cameraStreamRef.current;
+
+    const audioTracks = microphoneStreamRef.current?.getAudioTracks() || cameraStreamRef.current.getAudioTracks();
+
+    if (!isMobileCapture) {
+      return new MediaStream([...cameraStreamRef.current.getVideoTracks(), ...audioTracks]);
+    }
 
     const canvas = captureCanvasRef.current;
     if (!canvas || typeof canvas.captureStream !== 'function') {
-      return cameraStreamRef.current;
+      return new MediaStream([...cameraStreamRef.current.getVideoTracks(), ...audioTracks]);
     }
 
     renderVideoFrameToCanvas();
     const canvasStream = canvas.captureStream(30);
-    const audioTracks = cameraStreamRef.current.getAudioTracks();
     return new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
   };
 
@@ -956,6 +1028,10 @@ export default function CreatePage() {
       startPreviewRenderLoop();
     }
 
+    if (flashEnabled && flashSupported) {
+      await applyTorch(true);
+    }
+
     if (recorder.state === 'paused') {
       recorder.resume();
     }
@@ -975,6 +1051,7 @@ export default function CreatePage() {
     if (!recorder || recorder.state !== 'recording') return;
 
     stopPreviewRenderLoop();
+    void applyTorch(false);
 
     recorder.pause();
 
@@ -1004,6 +1081,7 @@ export default function CreatePage() {
     if (!recorder) return;
 
     stopPreviewRenderLoop();
+    await applyTorch(false);
 
     if (recorder.state === 'recording') {
       pauseClipRecording();
@@ -1029,6 +1107,16 @@ export default function CreatePage() {
     }
 
     const video = cameraVideoRef.current;
+
+    if (flashEnabled) {
+      if (flashSupported) {
+        await applyTorch(true);
+        await new Promise((resolve) => window.setTimeout(resolve, 120));
+      } else {
+        setScreenFlashActive(true);
+        window.setTimeout(() => setScreenFlashActive(false), 160);
+      }
+    }
 
     if (!cameraReady || !video.videoWidth || !video.videoHeight) {
       setError('Camera is still loading. Try again.');
@@ -1068,8 +1156,11 @@ export default function CreatePage() {
 
     if (!blob) {
       setError('Photo capture failed. Please try again.');
+      await applyTorch(false);
       return;
     }
+
+    await applyTorch(false);
 
     if (navigator.vibrate) navigator.vibrate(6);
     const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
@@ -1178,9 +1269,11 @@ export default function CreatePage() {
 
     const nextFacing: FacingMode = cameraFacing === 'user' ? 'environment' : 'user';
     setCameraFacing(nextFacing);
+    setScreenFlashActive(false);
 
     try {
-      await startCameraStream(nextFacing, microphoneAllowedRef.current);
+      await prewarmCameraStream(nextFacing);
+      await startCameraStream(nextFacing);
     } catch {
       setError('Unable to switch cameras right now.');
     }
@@ -1655,16 +1748,17 @@ export default function CreatePage() {
 
               {!cameraUnavailable ? (
                 <div className="flex items-center gap-2">
-                  {cameraFacing === 'user' && (
-                    <button
-                      type="button"
-                      onClick={() => setFrontMirrorEnabled((prev) => !prev)}
-                      className="px-2.5 py-2 rounded-full bg-black/40 border border-white/15 text-[11px]"
-                      aria-pressed={frontMirrorEnabled}
-                    >
-                      Mirror
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setFlashEnabled((prev) => !prev)}
+                    disabled={!flashSupported}
+                    className={`h-11 w-11 rounded-full border flex items-center justify-center transition-all ${flashEnabled && flashSupported ? 'bg-amber-400/20 border-amber-300/40 text-amber-200' : 'bg-black/45 border-white/20 text-white'} ${!flashSupported ? 'opacity-45' : 'active:scale-95'}`}
+                    aria-label="Toggle flash"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="pointer-events-none">
+                      <path d="M13 2L6 13h5l-1 9 8-12h-5l0-8z" />
+                    </svg>
+                  </button>
 
                   <button
                     type="button"
@@ -1691,26 +1785,37 @@ export default function CreatePage() {
             {!showPortraitGuard && !cameraUnavailable && !requestingPermissions && (
               <>
                 <div
-                  className="absolute inset-0"
-                  onPointerDown={handlePreviewTap}
-                  onTouchMove={handlePreviewTouchMove}
-                  onTouchEnd={handlePreviewTouchEnd}
+                  className="absolute inset-0 flex items-center justify-center px-3"
                 >
-                  <video
-                    ref={cameraVideoRef}
-                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-150"
-                    autoPlay
-                    playsInline
-                    muted
-                    style={{ transform: `${previewMirrored ? 'scaleX(-1) ' : ''}${zoomRange.max <= zoomRange.min ? `scale(${zoomLevel})` : 'scale(1)'}` }}
-                  />
-
-                  {focusPoint && (
-                    <div
-                      className="absolute w-16 h-16 rounded-full border border-white/80 shadow-[0_0_30px_rgba(255,255,255,0.2)] -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-                      style={{ left: `${focusPoint.x}%`, top: `${focusPoint.y}%` }}
+                  <div
+                    className="relative overflow-hidden rounded-[32px] border border-white/10 bg-black shadow-[0_25px_60px_rgba(0,0,0,0.55)]"
+                    style={{ width: `${cameraFrame.width}px`, height: `${cameraFrame.height}px` }}
+                    onPointerDown={handlePreviewTap}
+                    onTouchMove={handlePreviewTouchMove}
+                    onTouchEnd={handlePreviewTouchEnd}
+                  >
+                    <video
+                      ref={cameraVideoRef}
+                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-150"
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{ transform: `${previewMirrored ? 'scaleX(-1) ' : ''}${zoomRange.max <= zoomRange.min ? `scale(${zoomLevel})` : 'scale(1)'}` }}
                     />
-                  )}
+
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/35" />
+
+                    {screenFlashActive && (
+                      <div className="absolute inset-0 bg-white/90 pointer-events-none animate-pulse" />
+                    )}
+
+                    {focusPoint && (
+                      <div
+                        className="absolute w-16 h-16 rounded-full border border-white/80 shadow-[0_0_30px_rgba(255,255,255,0.2)] -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                        style={{ left: `${focusPoint.x}%`, top: `${focusPoint.y}%` }}
+                      />
+                    )}
+                  </div>
                 </div>
 
                 <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/70" />
@@ -1718,7 +1823,7 @@ export default function CreatePage() {
                 {!cameraReady && (
                   <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/35 backdrop-blur-[2px]">
                     <div className="rounded-2xl border border-white/10 bg-black/60 px-4 py-3 text-center text-sm text-white/90">
-                      Finalizing camera preview...
+                      Connecting camera...
                     </div>
                   </div>
                 )}
@@ -1865,7 +1970,7 @@ export default function CreatePage() {
                 <p className="text-sm text-gray-400 max-w-[320px] mb-6">
                   {requestingPermissions
                     ? isMobileCapture
-                      ? 'Opening front camera and microphone for vertical capture.'
+                      ? 'Opening front camera for instant vertical capture.'
                       : 'Opening camera with desktop-safe defaults.'
                     : 'Camera access is not available right now. You can continue from gallery.'}
                 </p>

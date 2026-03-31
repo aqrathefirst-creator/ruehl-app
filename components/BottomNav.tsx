@@ -5,6 +5,7 @@ import { Home, Flame, Calendar, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
 import { clearCreateUploadState, subscribeToCreateUpload, type CreateUploadSnapshot } from '@/lib/createUploadQueue';
+import { prewarmCameraStream } from '@/lib/cameraSession';
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -78,6 +79,32 @@ export default function BottomNav() {
   }, []);
 
   useEffect(() => subscribeToCreateUpload(setUploadSnapshot), []);
+
+  useEffect(() => {
+    router.prefetch('/create');
+    router.prefetch('/now');
+    router.prefetch('/notifications');
+
+    if (typeof window === 'undefined' || !navigator.permissions?.query) return;
+
+    navigator.permissions
+      .query({ name: 'camera' as PermissionName })
+      .then((status) => {
+        if (status.state !== 'granted') return;
+
+        const warm = () => {
+          void prewarmCameraStream('user');
+        };
+
+        if ('requestIdleCallback' in window) {
+          (window as Window & { requestIdleCallback?: (callback: () => void) => number }).requestIdleCallback?.(warm);
+          return;
+        }
+
+        setTimeout(warm, 120);
+      })
+      .catch(() => undefined);
+  }, [router]);
 
   // 🔥 UPDATED TABS (Train removed, Now moved)
   const tabs = [
@@ -167,6 +194,15 @@ export default function BottomNav() {
       {/* CENTER POST BUTTON */}
       <button
         onClick={() => router.push('/create')}
+        onPointerEnter={() => {
+          void prewarmCameraStream('user');
+        }}
+        onTouchStart={() => {
+          void prewarmCameraStream('user');
+        }}
+        onFocus={() => {
+          void prewarmCameraStream('user');
+        }}
         className="relative -mt-8 w-14 h-14 rounded-full bg-gradient-to-r from-green-400 to-purple-500 flex items-center justify-center shadow-lg active:scale-90 transition"
       >
         <Plus size={26} className="text-black" />

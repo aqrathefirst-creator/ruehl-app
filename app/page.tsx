@@ -3,9 +3,9 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/preserve-manual-memoization */
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase, uploadPostMedia } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import PageWrapper from '../components/PageWrapper';
 import VerificationBadge from '@/components/VerificationBadge';
 
@@ -106,6 +106,8 @@ const [suggestedSounds, setSuggestedSounds] = useState<any[]>([]);
   const [animatingPost, setAnimatingPost] = useState<string | null>(null);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const handledDeepLinkRef = useRef<string | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('overlayMode');
@@ -282,7 +284,7 @@ const fetchSuggestedSounds = async (mood: string) => {
 
   const sortedPosts = useMemo(
     () => [...posts].sort((a, b) => getPostScore(b) - getPostScore(a)),
-    [posts, likes, comments]
+    [posts, likes, comments, lifts]
   );
 
   const unreadNotifications = useMemo(
@@ -310,6 +312,17 @@ const fetchSuggestedSounds = async (mood: string) => {
     () => sortedPosts.filter((post) => !post.media_url && !!post.content?.trim()).slice(0, 12),
     [sortedPosts]
   );
+
+  useEffect(() => {
+    const targetPostId = searchParams.get('post');
+    if (!targetPostId || handledDeepLinkRef.current === targetPostId) return;
+
+    const targetPost = powerFeedPosts.find((post) => post.id === targetPostId);
+    if (!targetPost) return;
+
+    handledDeepLinkRef.current = targetPostId;
+    setActivePowerPost(targetPost);
+  }, [searchParams, powerFeedPosts]);
 
   const isVideoMedia = (url: string) => /\.(mp4|webm|ogg)(\?.*)?$/i.test(url);
 
@@ -502,6 +515,14 @@ const fetchSuggestedSounds = async (mood: string) => {
 
     await supabase.from('comments').update({ content: newContent }).eq('id', commentId);
     fetchData();
+  };
+
+  const closePowerPost = () => {
+    setActivePowerPost(null);
+
+    if (searchParams.get('post')) {
+      router.replace('/');
+    }
   };
 
   return (
@@ -813,7 +834,7 @@ const fetchSuggestedSounds = async (mood: string) => {
       {activePowerPost && (
         <div
           className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4"
-          onClick={() => setActivePowerPost(null)}
+          onClick={closePowerPost}
         >
           <div
             className="w-full max-w-[400px] max-h-[85dvh] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111]"
@@ -828,7 +849,7 @@ const fetchSuggestedSounds = async (mood: string) => {
                   @{getProfile(activePowerPost.user_id)?.username || 'user'}
                 </button>
                 <button
-                  onClick={() => setActivePowerPost(null)}
+                  onClick={closePowerPost}
                   className="w-8 h-8 rounded-full bg-white/10 text-white flex items-center justify-center text-lg active:scale-90 transition-transform"
                 >
                   ×

@@ -18,10 +18,28 @@ export const useUser = () => {
 
   useEffect(() => {
     const loadUser = async () => {
+      const cachedUser = sessionStorage.getItem('ruehl:user');
+      const cachedProfile = sessionStorage.getItem('ruehl:profile');
+
+      if (cachedUser) {
+        setUser(JSON.parse(cachedUser) as User);
+      }
+
+      if (cachedProfile) {
+        setProfile(JSON.parse(cachedProfile) as UserProfile);
+      }
+
       const { data } = await supabase.auth.getUser();
       const authUser = data.user;
 
       setUser(authUser);
+
+      if (authUser) {
+        sessionStorage.setItem('ruehl:user', JSON.stringify(authUser));
+      } else {
+        sessionStorage.removeItem('ruehl:user');
+        sessionStorage.removeItem('ruehl:profile');
+      }
 
       if (!authUser) {
         setLoading(false);
@@ -35,10 +53,21 @@ export const useUser = () => {
         .single();
 
       setProfile(profileData || null);
+      if (profileData) {
+        sessionStorage.setItem('ruehl:profile', JSON.stringify(profileData));
+      }
       setLoading(false);
     };
 
     loadUser();
+
+    const { data: subscription } = supabase.auth.onAuthStateChange(() => {
+      void loadUser();
+    });
+
+    return () => {
+      subscription.subscription.unsubscribe();
+    };
   }, []);
 
   return {
