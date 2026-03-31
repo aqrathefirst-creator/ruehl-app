@@ -129,6 +129,7 @@ export default function CreatePage() {
   const [cameraDenied, setCameraDenied] = useState(false);
   const [micDenied, setMicDenied] = useState(false);
   const [isMobileCapture, setIsMobileCapture] = useState(false);
+  const [isLandscapeViewport, setIsLandscapeViewport] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraFacing, setCameraFacing] = useState<FacingMode>('environment');
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -524,7 +525,7 @@ export default function CreatePage() {
   };
 
   const initializePermissions = async () => {
-    if (isPowr) return;
+    if (isPowr || showPortraitGuard) return;
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraDenied(true);
@@ -660,6 +661,38 @@ export default function CreatePage() {
     setIsMobileCapture(isLikelyMobileBrowser());
   }, []);
 
+  useEffect(() => {
+    const updateViewportOrientation = () => {
+      const landscape = window.matchMedia('(orientation: landscape)').matches;
+      setIsLandscapeViewport(landscape);
+    };
+
+    updateViewportOrientation();
+    window.addEventListener('resize', updateViewportOrientation);
+    window.addEventListener('orientationchange', updateViewportOrientation);
+
+    return () => {
+      window.removeEventListener('resize', updateViewportOrientation);
+      window.removeEventListener('orientationchange', updateViewportOrientation);
+    };
+  }, []);
+
+  useEffect(() => {
+    const shouldLockScroll = view === 'camera';
+    if (!shouldLockScroll) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const previousTouchAction = document.body.style.touchAction;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.touchAction = previousTouchAction;
+    };
+  }, [view]);
+
   // Attach the captured stream to the preview element once it mounts.
   useEffect(() => {
     if (requestingPermissions || view !== 'camera') return;
@@ -693,11 +726,17 @@ export default function CreatePage() {
       revokeTrimmedUrl();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMobileCapture]);
+  }, [isLandscapeViewport, isMobileCapture]);
 
   useEffect(() => {
     if (view === 'camera') {
-      if (!cameraStreamRef.current && !requestingPermissions && !cameraDenied && !isPowr) {
+      if (showPortraitGuard) {
+        stopPreviewRenderLoop();
+        stopCameraStream();
+        return;
+      }
+
+      if (!cameraStreamRef.current && !requestingPermissions && !cameraDenied && !isPowr && !showPortraitGuard) {
         void initializePermissions();
       }
       return;
@@ -705,7 +744,7 @@ export default function CreatePage() {
 
     stopPreviewRenderLoop();
     stopCameraStream();
-  }, [cameraDenied, isPowr, requestingPermissions, view]);
+  }, [cameraDenied, isPowr, requestingPermissions, showPortraitGuard, view]);
 
   useEffect(() => {
     if (!selectedMedia || selectedMedia.kind !== 'video') return;
@@ -1518,14 +1557,15 @@ export default function CreatePage() {
   };
 
   const cameraUnavailable = cameraDenied || isPowr;
+  const showPortraitGuard = view === 'camera' && isMobileCapture && isLandscapeViewport;
 
   return (
     <div
-      className="w-full min-h-screen bg-black flex justify-center"
+      className="fixed inset-0 z-40 w-screen h-screen bg-black overflow-hidden"
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      <div className="w-full max-w-[430px] h-[100dvh] relative bg-black text-white overflow-hidden">
+      <div className="absolute inset-0 w-full h-[100dvh] relative bg-black text-white overflow-hidden">
         <input
           ref={galleryInputRef}
           type="file"
@@ -1540,7 +1580,10 @@ export default function CreatePage() {
 
         {view === 'camera' && (
           <>
-            <div className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-4 pt-5 pb-3">
+            <div
+              className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-4 pb-3"
+              style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
+            >
               <button
                 onClick={() => router.back()}
                 className="px-3 py-1.5 rounded-full bg-black/40 border border-white/15 text-sm"
@@ -1562,7 +1605,7 @@ export default function CreatePage() {
               )}
             </div>
 
-            {!cameraUnavailable && !requestingPermissions && (
+            {!showPortraitGuard && !cameraUnavailable && !requestingPermissions && (
               <>
                 <div
                   className="absolute inset-0"
@@ -1597,7 +1640,10 @@ export default function CreatePage() {
                   </div>
                 )}
 
-                <div className="absolute top-16 left-4 right-4 z-30">
+                <div
+                  className="absolute left-4 right-4 z-30"
+                  style={{ top: 'calc(env(safe-area-inset-top) + 4.5rem)' }}
+                >
                   <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-100"
@@ -1618,7 +1664,10 @@ export default function CreatePage() {
                   )}
                 </div>
 
-                <div className="absolute bottom-28 left-0 right-0 z-30 text-center text-xs text-white/80">
+                <div
+                  className="absolute left-0 right-0 z-30 text-center text-xs text-white/80"
+                  style={{ bottom: 'calc(env(safe-area-inset-bottom) + 7rem)' }}
+                >
                   {isMobileCapture
                     ? 'Tap photo. Hold to record vertical clips. Swipe up for gallery.'
                     : 'Tap photo. Hold to record clips. Swipe up for gallery.'}
@@ -1631,12 +1680,18 @@ export default function CreatePage() {
                 )}
 
                 {micDenied && (
-                  <div className="absolute bottom-36 left-1/2 -translate-x-1/2 z-30 rounded-full bg-black/55 border border-white/15 px-3 py-1 text-[11px] text-white/85">
+                  <div
+                    className="absolute left-1/2 -translate-x-1/2 z-30 rounded-full bg-black/55 border border-white/15 px-3 py-1 text-[11px] text-white/85"
+                    style={{ bottom: 'calc(env(safe-area-inset-bottom) + 9rem)' }}
+                  >
                     Microphone denied. Video records without audio.
                   </div>
                 )}
 
-                <div className="absolute bottom-10 left-0 right-0 z-30 h-24">
+                <div
+                  className="absolute left-0 right-0 z-30 h-24"
+                  style={{ bottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
+                >
                   <button
                     type="button"
                     onClick={openGallery}
@@ -1705,7 +1760,17 @@ export default function CreatePage() {
               </>
             )}
 
-            {(cameraUnavailable || requestingPermissions) && (
+            {showPortraitGuard && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center bg-black/90 z-40">
+                <div className="w-20 h-20 rounded-full bg-white/10 border border-white/15 mb-5" />
+                <h2 className="text-xl font-semibold mb-2">Rotate to portrait</h2>
+                <p className="text-sm text-gray-400 max-w-[320px]">
+                  The camera is optimized for vertical capture. Rotate your device to continue.
+                </p>
+              </div>
+            )}
+
+            {(cameraUnavailable || requestingPermissions) && !showPortraitGuard && (
               <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
                 <div className="w-20 h-20 rounded-full bg-white/10 border border-white/15 mb-5" />
                 <h2 className="text-xl font-semibold mb-2">

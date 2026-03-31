@@ -22,6 +22,7 @@ export default function RootLayout({
   const [isVerified, setIsVerified] = useState(false);
 
   const isPublicPage = PUBLIC_PATHS.has(pathname || '');
+  const isCreateRoute = (pathname || '').startsWith('/create');
 
   useEffect(() => {
     let mounted = true;
@@ -117,7 +118,7 @@ export default function RootLayout({
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
 
-  const showNav = isAuthenticated && isVerified && !isPublicPage;
+  const showNav = isAuthenticated && isVerified && !isPublicPage && !isCreateRoute;
 
   return (
     <html lang="en">
