@@ -226,6 +226,7 @@ export default function AdminPage() {
 
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUserDetail, setSelectedUserDetail] = useState<UserDetail | null>(null);
+  const [userDetailLoading, setUserDetailLoading] = useState(false);
   const [adminNoteDraft, setAdminNoteDraft] = useState('');
   const [suspendDays, setSuspendDays] = useState(7);
 
@@ -312,8 +313,16 @@ export default function AdminPage() {
   };
 
   const loadUserDetail = async (userId: string) => {
-    const data = await withAdminFetch(`/api/admin/users/${userId}`);
-    setSelectedUserDetail(data as UserDetail);
+    setUserDetailLoading(true);
+    try {
+      const data = await withAdminFetch(`/api/admin/users/${userId}`);
+      setSelectedUserDetail(data as UserDetail);
+    } catch (detailError: unknown) {
+      setSelectedUserDetail(null);
+      setError(detailError instanceof Error ? detailError.message : 'Unable to load user detail');
+    } finally {
+      setUserDetailLoading(false);
+    }
   };
 
   const loadModeration = async () => {
@@ -407,6 +416,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!selectedUserId || activeSection !== 'users') return;
+    setSelectedUserDetail(null);
     void loadUserDetail(selectedUserId);
   }, [activeSection, selectedUserId]);
 
@@ -645,7 +655,11 @@ export default function AdminPage() {
                               {users.map((user) => (
                                 <tr
                                   key={user.id}
-                                  onClick={() => setSelectedUserId(user.id)}
+                                  onClick={() => {
+                                    clearFeedback();
+                                    setSelectedUserDetail(null);
+                                    setSelectedUserId(user.id);
+                                  }}
                                   className={`border-b border-white/5 cursor-pointer transition ${selectedUserId === user.id ? 'bg-cyan-500/10' : 'hover:bg-white/[0.03]'}`}
                                 >
                                   <td className="py-3 pr-3">
@@ -678,8 +692,10 @@ export default function AdminPage() {
                       <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
                         {!selectedUserId ? (
                           <div className="text-sm text-gray-400">Select a user to open the detail panel.</div>
-                        ) : !selectedUserDetail ? (
+                        ) : userDetailLoading ? (
                           <div className="text-sm text-gray-400">Loading user detail...</div>
+                        ) : !selectedUserDetail ? (
+                          <div className="text-sm text-red-300">Unable to load user detail. Try selecting the user again.</div>
                         ) : (
                           <div className="space-y-4">
                             <div>

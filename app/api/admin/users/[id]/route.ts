@@ -3,6 +3,16 @@ import { jsonError, jsonOk } from '@/lib/server/responses';
 
 type AdminAction = 'verify' | 'shadow_ban' | 'suspend' | 'reset_password' | 'delete_user' | 'add_note';
 
+type ErrorLike = {
+  code?: string;
+  message?: string;
+};
+
+function isMissingRelationError(error: ErrorLike | null | undefined) {
+  if (!error) return false;
+  return error.code === '42P01' || /relation .* does not exist/i.test(error.message || '');
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin(request.headers.get('authorization'));
   if (!auth.ok) return jsonError(auth.error, auth.status);
@@ -46,18 +56,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   if (userResult.error) return jsonError(userResult.error.message, 400);
   if (profileResult.error) return jsonError(profileResult.error.message, 400);
-  if (activityResult.error) return jsonError(activityResult.error.message, 400);
-  if (postsResult.error) return jsonError(postsResult.error.message, 400);
-  if (reportsResult.error) return jsonError(reportsResult.error.message, 400);
-  if (notesResult.error) return jsonError(notesResult.error.message, 400);
+  if (activityResult.error && !isMissingRelationError(activityResult.error)) return jsonError(activityResult.error.message, 400);
+  if (postsResult.error && !isMissingRelationError(postsResult.error)) return jsonError(postsResult.error.message, 400);
+  if (reportsResult.error && !isMissingRelationError(reportsResult.error)) return jsonError(reportsResult.error.message, 400);
+  if (notesResult.error && !isMissingRelationError(notesResult.error)) return jsonError(notesResult.error.message, 400);
 
   return jsonOk({
     user: userResult.data?.user || null,
     profile: profileResult.data || null,
-    activity: activityResult.data || [],
-    posts: postsResult.data || [],
-    reports: reportsResult.data || [],
-    notes: notesResult.data || [],
+    activity: isMissingRelationError(activityResult.error) ? [] : activityResult.data || [],
+    posts: isMissingRelationError(postsResult.error) ? [] : postsResult.data || [],
+    reports: isMissingRelationError(reportsResult.error) ? [] : reportsResult.data || [],
+    notes: isMissingRelationError(notesResult.error) ? [] : notesResult.data || [],
   });
 }
 
