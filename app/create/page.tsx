@@ -1564,6 +1564,7 @@ export default function CreatePage() {
       className="fixed inset-0 z-40 w-screen h-screen bg-black overflow-hidden"
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
+      style={{ overscrollBehavior: 'none' }}
     >
       <div className="absolute inset-0 w-full h-[100dvh] relative bg-black text-white overflow-hidden">
         <input
@@ -1582,7 +1583,7 @@ export default function CreatePage() {
           <>
             <div
               className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-4 pb-3"
-              style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }}
+              style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
             >
               <button
                 onClick={() => router.back()}
@@ -1630,7 +1631,7 @@ export default function CreatePage() {
                   )}
                 </div>
 
-                <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/60" />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/70" />
 
                 {!cameraReady && (
                   <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/35 backdrop-blur-[2px]">
@@ -1642,7 +1643,7 @@ export default function CreatePage() {
 
                 <div
                   className="absolute left-4 right-4 z-30"
-                  style={{ top: 'calc(env(safe-area-inset-top) + 4.5rem)' }}
+                  style={{ top: 'calc(env(safe-area-inset-top) + 4.2rem)' }}
                 >
                   <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
                     <div
@@ -1666,7 +1667,7 @@ export default function CreatePage() {
 
                 <div
                   className="absolute left-0 right-0 z-30 text-center text-xs text-white/80"
-                  style={{ bottom: 'calc(env(safe-area-inset-bottom) + 7rem)' }}
+                  style={{ bottom: 'calc(env(safe-area-inset-bottom) + 7.25rem)' }}
                 >
                   {isMobileCapture
                     ? 'Tap photo. Hold to record vertical clips. Swipe up for gallery.'
@@ -1674,7 +1675,10 @@ export default function CreatePage() {
                 </div>
 
                 {isMobileCapture && (
-                  <div className="absolute top-28 left-1/2 -translate-x-1/2 z-30 rounded-full bg-black/55 border border-white/15 px-3 py-1 text-[11px] text-white/85">
+                  <div
+                    className="absolute left-1/2 -translate-x-1/2 z-30 rounded-full bg-black/55 border border-white/15 px-3 py-1 text-[11px] text-white/85"
+                    style={{ top: 'calc(env(safe-area-inset-top) + 5.8rem)' }}
+                  >
                     Mobile 9:16 capture active
                   </div>
                 )}
@@ -1690,12 +1694,12 @@ export default function CreatePage() {
 
                 <div
                   className="absolute left-0 right-0 z-30 h-24"
-                  style={{ bottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
+                  style={{ bottom: 'calc(env(safe-area-inset-bottom) + 0.9rem)' }}
                 >
                   <button
                     type="button"
                     onClick={openGallery}
-                    className="absolute left-6 bottom-3 w-14 h-14 rounded-[18px] overflow-hidden border border-white/20 bg-white/10 shadow-lg"
+                    className="absolute left-6 bottom-4 w-14 h-14 rounded-[18px] overflow-hidden border border-white/20 bg-white/10 shadow-lg"
                   >
                     {lastGalleryThumbnail ? (
                       <img src={lastGalleryThumbnail} alt="Recent gallery item" className="w-full h-full object-cover" />
@@ -1706,7 +1710,7 @@ export default function CreatePage() {
                     )}
                   </button>
 
-                  <div className={`absolute left-1/2 -translate-x-1/2 bottom-0 relative h-24 w-24 ${recording ? 'drop-shadow-[0_0_16px_rgba(236,72,153,0.65)]' : ''}`}>
+                  <div className={`absolute left-1/2 -translate-x-1/2 bottom-1 relative h-24 w-24 ${recording ? 'drop-shadow-[0_0_16px_rgba(236,72,153,0.65)]' : ''}`}>
                     <svg className="absolute inset-0 h-24 w-24 -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
                       <circle cx="40" cy="40" r={progressCircle.radius} stroke="rgba(255,255,255,0.28)" strokeWidth="5" fill="none" />
                       <circle
@@ -1751,7 +1755,7 @@ export default function CreatePage() {
                       onClick={() => {
                         void finalizeRecordedVideo();
                       }}
-                      className="absolute right-6 bottom-3 px-4 py-3 rounded-full bg-white/15 border border-white/20 text-xs"
+                      className="absolute right-6 bottom-4 px-4 py-3 rounded-full bg-white/15 border border-white/20 text-xs"
                     >
                       Next
                     </button>
