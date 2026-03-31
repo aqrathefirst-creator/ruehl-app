@@ -90,6 +90,7 @@ export default function RankingPage() {
                 {p.avatar_url ? (
                   <img
                     src={p.avatar_url}
+                    alt={`${p.username} avatar`}
                     className="w-12 h-12 rounded-full object-cover flex-shrink-0"
                   />
                 ) : (

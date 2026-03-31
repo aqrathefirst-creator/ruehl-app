@@ -3,9 +3,8 @@
 /* eslint-disable react-hooks/immutability */
 /* eslint-disable react-hooks/purity */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import PageWrapper from '../../components/PageWrapper';
 import { useRouter } from 'next/navigation';
 import VerificationBadge from '@/components/VerificationBadge';
 
@@ -48,18 +47,13 @@ export default function ExplorePage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [likes, setLikes] = useState<Like[]>([]);
-  const [follows, setFollows] = useState<Follow[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [suggestedUsers, setSuggestedUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
 
   const router = useRouter();
 
-  useEffect(() => {
-    init();
-  }, []);
-
-  const init = async () => {
+  const init = useCallback(async () => {
     setLoading(true);
 
     const { data: userData } = await supabase.auth.getUser();
@@ -86,14 +80,16 @@ export default function ExplorePage() {
     setProfiles(visibleProfiles);
     setComments(commentsData || []);
     setLikes(likesData || []);
-    setFollows(followsData || []);
-
     if (user?.id && profilesData && followsData) {
       generateSuggestions(profilesData, followsData, user.id);
     }
 
     setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    void init();
+  }, [init]);
 
   const getProfile = (id: string) =>
     profiles.find((p) => p.id === id);
@@ -173,7 +169,7 @@ export default function ExplorePage() {
                       onClick={() => router.push(`/profile/${user.id}`)}
                     >
                       {user.avatar_url ? (
-                        <img src={user.avatar_url} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+                        <img src={user.avatar_url} alt={`${user.username} avatar`} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
                       ) : (
                         <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex-shrink-0" />
                       )}
@@ -212,7 +208,7 @@ export default function ExplorePage() {
                         {post.content && <p className="text-gray-300 leading-relaxed">{post.content}</p>}
 
                         {post.media_url && (
-                          <img src={post.media_url} className="w-full rounded-xl border border-white/10" />
+                          <img src={post.media_url} alt="Post media" className="w-full rounded-xl border border-white/10" />
                         )}
 
                         <div className="flex gap-6 pt-2 border-t border-white/10">

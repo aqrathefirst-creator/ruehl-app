@@ -110,7 +110,7 @@ export default function NutritionPage() {
               >
                 <div className="text-sm font-semibold text-white mb-2">@{profileById(post.user_id)?.username || 'user'}</div>
                 {post.media_url ? (
-                  <img src={post.media_url} className="w-full h-44 object-cover rounded-xl" />
+                  <img src={post.media_url} alt="Nutrition post media" className="w-full h-44 object-cover rounded-xl" />
                 ) : null}
                 {post.content ? (
                   <p className="text-sm text-gray-200 mt-2">{post.content}</p>

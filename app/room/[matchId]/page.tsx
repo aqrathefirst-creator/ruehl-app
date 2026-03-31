@@ -200,6 +200,7 @@ export default function RoomPage() {
         {otherProfile?.avatar_url && (
           <img
             src={otherProfile.avatar_url}
+            alt={`${otherProfile.username || 'User'} avatar`}
             className="w-10 h-10 rounded-lg object-cover"
           />
         )}

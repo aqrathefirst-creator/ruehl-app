@@ -9,10 +9,7 @@ import { clearCreateUploadState, subscribeToCreateUpload, type CreateUploadSnaps
 export default function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
-
-  if ((pathname || '').startsWith('/admin')) {
-    return null;
-  }
+  const isAdminRoute = (pathname || '').startsWith('/admin');
 
   const [userId, setUserId] = useState<string | null>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
@@ -23,7 +20,7 @@ export default function BottomNav() {
     status: '',
     error: null,
     itemId: null,
-    updatedAt: Date.now(),
+    updatedAt: 0,
   });
 
   useEffect(() => {
@@ -90,6 +87,10 @@ export default function BottomNav() {
   ];
 
   const isProfileActive = pathname?.startsWith('/profile');
+
+  if (isAdminRoute) {
+    return null;
+  }
 
   return (
     <>
@@ -216,7 +217,7 @@ export default function BottomNav() {
             }`}
           >
             {avatar ? (
-              <img src={avatar} className="w-full h-full object-cover" />
+              <img src={avatar} alt="Profile avatar" className="w-full h-full object-cover" />
             ) : (
               username?.[0]?.toUpperCase() || 'U'
             )}

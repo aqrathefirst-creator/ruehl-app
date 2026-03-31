@@ -154,6 +154,7 @@ export default function SoundPage() {
                 <div className="absolute inset-0">
                   <img
                     src={post.media_url}
+                    alt="Sound post media"
                     className="w-full h-full object-contain"
                   />
                 </div>

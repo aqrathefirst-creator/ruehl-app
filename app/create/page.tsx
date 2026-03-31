@@ -10,6 +10,7 @@ type CreateView = 'camera' | 'gallery' | 'editor';
 type FacingMode = 'user' | 'environment';
 type MediaKind = 'image' | 'video';
 type EditorTool = 'trim' | 'text' | 'filters' | 'sound' | 'genre' | 'cover';
+type CaptureIntent = 'idle' | 'photo' | 'video';
 
 type MediaItem = {
   file: File;
@@ -125,14 +126,15 @@ export default function CreatePage() {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [galleryItems, setGalleryItems] = useState<MediaItem[]>([]);
 
-  const [requestingPermissions, setRequestingPermissions] = useState(!isPowr);
+  const [requestingPermissions, setRequestingPermissions] = useState(false);
   const [cameraDenied, setCameraDenied] = useState(false);
   const [micDenied, setMicDenied] = useState(false);
   const [isMobileCapture, setIsMobileCapture] = useState(false);
   const [isLandscapeViewport, setIsLandscapeViewport] = useState(false);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [cameraReady, setCameraReady] = useState(false);
-  const [cameraFacing, setCameraFacing] = useState<FacingMode>('environment');
+  const [cameraFacing, setCameraFacing] = useState<FacingMode>('user');
+  const [frontMirrorEnabled, setFrontMirrorEnabled] = useState(true);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1 });
   const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
@@ -178,6 +180,7 @@ export default function CreatePage() {
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
   const holdTimeoutRef = useRef<number | null>(null);
+  const captureIntentRef = useRef<CaptureIntent>('idle');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recorderChunksRef = useRef<Blob[]>([]);
   const activeClipStartRef = useRef<number | null>(null);
@@ -202,6 +205,10 @@ export default function CreatePage() {
   const selectedFilterCss = useMemo(() => {
     return FILTERS.find((filter) => filter.name === selectedFilter)?.css ?? 'none';
   }, [selectedFilter]);
+
+  const previewMirrored = useMemo(() => {
+    return cameraFacing === 'user' && frontMirrorEnabled;
+  }, [cameraFacing, frontMirrorEnabled]);
 
   const progressCircle = useMemo(() => {
     const radius = 34;
@@ -483,11 +490,29 @@ export default function CreatePage() {
 
     await video.play().catch(() => undefined);
 
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
+    await new Promise<void>((resolve) => {
+      const started = performance.now();
+
+      const check = () => {
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          setCameraReady(true);
+          resolve();
+          return;
+        }
+
+        if (performance.now() - started > 1400) {
+          resolve();
+          return;
+        }
+
+        requestAnimationFrame(check);
+      };
+
+      check();
+    });
+
+    if (!cameraReady && video.videoWidth > 0 && video.videoHeight > 0) {
       setCameraReady(true);
-      if (isMobileCapture) {
-        startPreviewRenderLoop();
-      }
     }
   };
 
@@ -561,6 +586,7 @@ export default function CreatePage() {
     } catch {
       setCameraDenied(true);
       setMicDenied(true);
+      setError('Allow camera access to capture photos and videos.');
       setRequestingPermissions(false);
       return;
     }
@@ -587,6 +613,7 @@ export default function CreatePage() {
         await startCameraStream(cameraFacing, true);
       } catch {
         setMicDenied(true);
+        setError('Microphone is unavailable. Video will be captured without audio.');
       }
     }
 
@@ -714,7 +741,7 @@ export default function CreatePage() {
     };
   }, [view]);
 
-  // Attach the captured stream to the preview element once it mounts.
+  // Attach an existing stream when the video element remounts.
   useEffect(() => {
     if (requestingPermissions || view !== 'camera') return;
     const stream = cameraStreamRef.current;
@@ -726,14 +753,9 @@ export default function CreatePage() {
       return;
     }
 
-    if (cameraReady && isMobileCapture) {
-      startPreviewRenderLoop();
-    }
-  }, [cameraReady, isMobileCapture, requestingPermissions, view]);
+  }, [cameraReady, requestingPermissions, view]);
 
   useEffect(() => {
-    void initializePermissions();
-
     return () => {
       stopProgressLoop();
       stopPreviewRenderLoop();
@@ -747,7 +769,7 @@ export default function CreatePage() {
       revokeTrimmedUrl();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLandscapeViewport, isMobileCapture]);
+  }, []);
 
   useEffect(() => {
     if (view === 'camera') {
@@ -874,6 +896,7 @@ export default function CreatePage() {
     }
 
     if (!mediaRecorderRef.current) {
+      recorderChunksRef.current = [];
       recordingStreamRef.current = nextStream;
       const mimeType = getPreferredRecorderMimeType();
       const recorder = mimeType
@@ -929,6 +952,10 @@ export default function CreatePage() {
     clearError();
     await lockPortraitOrientation();
 
+    if (isMobileCapture) {
+      startPreviewRenderLoop();
+    }
+
     if (recorder.state === 'paused') {
       recorder.resume();
     }
@@ -946,6 +973,8 @@ export default function CreatePage() {
   const pauseClipRecording = () => {
     const recorder = mediaRecorderRef.current;
     if (!recorder || recorder.state !== 'recording') return;
+
+    stopPreviewRenderLoop();
 
     recorder.pause();
 
@@ -974,6 +1003,8 @@ export default function CreatePage() {
     const recorder = mediaRecorderRef.current;
     if (!recorder) return;
 
+    stopPreviewRenderLoop();
+
     if (recorder.state === 'recording') {
       pauseClipRecording();
     }
@@ -986,6 +1017,11 @@ export default function CreatePage() {
 
   const capturePhoto = async () => {
     if (!cameraVideoRef.current || cameraDenied) return;
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      setError('Finish your current recording, then take a photo.');
+      return;
+    }
 
     if (clipSegments.length > 0 || totalRecordedMs > 0) {
       setError('Finish your video clips first, then capture a photo.');
@@ -1043,23 +1079,29 @@ export default function CreatePage() {
   const onCapturePointerDown = () => {
     if (cameraDenied || requestingPermissions || isPowr) return;
 
+    captureIntentRef.current = 'photo';
+
     holdTimeoutRef.current = window.setTimeout(() => {
+      captureIntentRef.current = 'video';
       void startClipRecording();
       holdTimeoutRef.current = null;
     }, HOLD_TO_RECORD_MS);
   };
 
   const onCapturePointerUp = async () => {
-    if (holdTimeoutRef.current) {
+    if (captureIntentRef.current === 'photo' && holdTimeoutRef.current) {
       window.clearTimeout(holdTimeoutRef.current);
       holdTimeoutRef.current = null;
+      captureIntentRef.current = 'idle';
       await capturePhoto();
       return;
     }
 
-    if (recording) {
+    if (captureIntentRef.current === 'video' && recording) {
       pauseClipRecording();
     }
+
+    captureIntentRef.current = 'idle';
   };
 
   const onCapturePointerCancel = () => {
@@ -1071,6 +1113,8 @@ export default function CreatePage() {
     if (recording) {
       pauseClipRecording();
     }
+
+    captureIntentRef.current = 'idle';
   };
 
   const openGallery = () => {
@@ -1138,7 +1182,7 @@ export default function CreatePage() {
     try {
       await startCameraStream(nextFacing, microphoneAllowedRef.current);
     } catch {
-      setError('Unable to switch camera.');
+      setError('Unable to switch cameras right now.');
     }
   };
 
@@ -1610,12 +1654,33 @@ export default function CreatePage() {
               </button>
 
               {!cameraUnavailable ? (
-                <button
-                  onClick={flipCamera}
-                  className="px-3 py-1.5 rounded-full bg-black/40 border border-white/15 text-sm"
-                >
-                  Flip
-                </button>
+                <div className="flex items-center gap-2">
+                  {cameraFacing === 'user' && (
+                    <button
+                      type="button"
+                      onClick={() => setFrontMirrorEnabled((prev) => !prev)}
+                      className="px-2.5 py-2 rounded-full bg-black/40 border border-white/15 text-[11px]"
+                      aria-pressed={frontMirrorEnabled}
+                    >
+                      Mirror
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={flipCamera}
+                    className="h-11 w-11 rounded-full bg-black/45 border border-white/20 flex items-center justify-center active:scale-95 transition-transform"
+                    aria-label="Switch camera"
+                  >
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                      <path d="M3 7h4l2-2h6l2 2h4v10h-4l-2 2H9l-2-2H3z" />
+                      <path d="M8 12a4 4 0 0 1 6.8-2.8" />
+                      <path d="M16 12a4 4 0 0 1-6.8 2.8" />
+                      <path d="M14.8 9.2h-2.7V6.5" />
+                      <path d="M9.2 14.8h2.7v2.7" />
+                    </svg>
+                  </button>
+                </div>
               ) : (
                 <div className="px-3 py-1.5 rounded-full bg-black/30 border border-white/10 text-xs text-gray-400">
                   Gallery Mode
@@ -1637,7 +1702,7 @@ export default function CreatePage() {
                     autoPlay
                     playsInline
                     muted
-                    style={{ transform: zoomRange.max <= zoomRange.min ? `scale(${zoomLevel})` : 'scale(1)' }}
+                    style={{ transform: `${previewMirrored ? 'scaleX(-1) ' : ''}${zoomRange.max <= zoomRange.min ? `scale(${zoomLevel})` : 'scale(1)'}` }}
                   />
 
                   {focusPoint && (
@@ -1705,7 +1770,7 @@ export default function CreatePage() {
                     className="absolute left-1/2 -translate-x-1/2 z-30 rounded-full bg-black/55 border border-white/15 px-3 py-1 text-[11px] text-white/85"
                     style={{ bottom: cameraUiLayout.micStatusBottom }}
                   >
-                    Microphone denied. Video records without audio.
+                    Mic access is off. Video will record without sound.
                   </div>
                 )}
 
@@ -1800,9 +1865,9 @@ export default function CreatePage() {
                 <p className="text-sm text-gray-400 max-w-[320px] mb-6">
                   {requestingPermissions
                     ? isMobileCapture
-                      ? 'Requesting vertical mobile camera and clean microphone input.'
-                      : 'Requesting camera first, then microphone to keep capture native.'
-                    : 'Camera permission was denied or the device camera is unavailable. Use gallery to keep creating.'}
+                      ? 'Opening front camera and microphone for vertical capture.'
+                      : 'Opening camera with desktop-safe defaults.'
+                    : 'Camera access is not available right now. You can continue from gallery.'}
                 </p>
 
                 <button

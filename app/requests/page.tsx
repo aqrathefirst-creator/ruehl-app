@@ -123,6 +123,7 @@ export default function RequestsPage() {
               {p?.avatar_url && (
                 <img
                   src={p.avatar_url}
+                  alt={`${p.username || 'User'} avatar`}
                   className="w-12 h-12 rounded-lg object-cover"
                 />
               )}

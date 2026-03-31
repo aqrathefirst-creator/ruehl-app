@@ -128,6 +128,7 @@ export default function ProfileClient({ userId }: { userId: string }) {
 
         <img
           src={profile?.avatar_url || 'https://via.placeholder.com/80'}
+          alt={`${profile?.username || 'User'} avatar`}
           className="w-20 h-20 rounded-full object-cover border"
         />
 
@@ -253,6 +254,7 @@ export default function ProfileClient({ userId }: { userId: string }) {
                 ) : (
                   <img
                     src={post.media_url}
+                    alt="Profile post media"
                     className="w-full h-full object-cover"
                   />
                 )

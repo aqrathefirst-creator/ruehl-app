@@ -135,7 +135,6 @@ export default function VerifyAccountPage() {
     setLoading(true);
 
     try {
-      const authApi = supabase.auth as any;
       if (pending.method === 'email') {
         const response = await fetch('/api/auth/otp/verify', {
           method: 'POST',
@@ -153,7 +152,7 @@ export default function VerifyAccountPage() {
         }
       } else {
         const phonePayload = { phone: pending.value, token: code.trim(), type: 'sms' as const };
-        const { error: phoneVerifyError } = await authApi.verifyOtp(phonePayload);
+        const { error: phoneVerifyError } = await supabase.auth.verifyOtp(phonePayload);
         if (phoneVerifyError) {
           throw phoneVerifyError;
         }

@@ -373,7 +373,7 @@ export default function SessionsPage() {
                     <div key={user.id} className="min-w-[135px] bg-white/5 border border-white/10 rounded-2xl p-3 flex-shrink-0">
                       <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-lg mb-2 overflow-hidden">
                         {user.avatar_url ? (
-                          <img src={user.avatar_url} className="w-full h-full object-cover" />
+                          <img src={user.avatar_url} alt={`${user.username} avatar`} className="w-full h-full object-cover" />
                         ) : (
                           user.username?.[0]?.toUpperCase()
                         )}
@@ -394,7 +394,7 @@ export default function SessionsPage() {
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 overflow-hidden flex items-center justify-center text-white font-semibold">
                             {user.avatar_url ? (
-                              <img src={user.avatar_url} className="w-full h-full object-cover" />
+                              <img src={user.avatar_url} alt={`${user.username} avatar`} className="w-full h-full object-cover" />
                             ) : (
                               user.username?.[0]?.toUpperCase()
                             )}

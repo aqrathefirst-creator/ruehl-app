@@ -105,7 +105,7 @@ export default function TrainPage() {
                 className="w-36 shrink-0 rounded-xl border border-white/10 bg-[#111111] p-3 text-left"
               >
                 {profile.avatar_url ? (
-                  <img src={profile.avatar_url} className="w-12 h-12 rounded-full object-cover" />
+                  <img src={profile.avatar_url} alt={`${profile.username} avatar`} className="w-12 h-12 rounded-full object-cover" />
                 ) : (
                   <div className="w-12 h-12 rounded-full bg-white/15" />
                 )}
@@ -151,7 +151,7 @@ export default function TrainPage() {
                 >
                   <div className="text-sm font-semibold text-white mb-2">@{profile?.username || 'user'}</div>
                   {post.media_url ? (
-                    <img src={post.media_url} className="w-full h-44 object-cover rounded-xl" />
+                    <img src={post.media_url} alt="Training post media" className="w-full h-44 object-cover rounded-xl" />
                   ) : null}
                   {post.content ? (
                     <p className="text-sm text-gray-200 mt-2">{post.content}</p>

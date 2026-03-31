@@ -75,7 +75,7 @@ export default function FollowersPage({ params }: { params: Promise<{ id: string
             className="w-full flex items-center gap-3 p-4 bg-white rounded-2xl border border-gray-200 hover:shadow-md transition-shadow"
           >
             {user.avatar_url ? (
-              <img src={user.avatar_url} className="w-12 h-12 rounded-full object-cover" />
+              <img src={user.avatar_url} alt={`${user.username} avatar`} className="w-12 h-12 rounded-full object-cover" />
             ) : (
               <div className="w-12 h-12 bg-gradient-to-br from-gray-300 to-gray-400 rounded-full" />
             )}

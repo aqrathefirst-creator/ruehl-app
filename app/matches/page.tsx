@@ -75,7 +75,7 @@ export default function MatchesPage() {
               <div key={m.id} className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
                 <div className="flex gap-4 items-start">
                   {p?.avatar_url ? (
-                    <img src={p.avatar_url} className="w-16 h-16 rounded-xl object-cover flex-shrink-0" />
+                    <img src={p.avatar_url} alt={`${p.username || 'User'} avatar`} className="w-16 h-16 rounded-xl object-cover flex-shrink-0" />
                   ) : (
                     <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex-shrink-0" />
                   )}

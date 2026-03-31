@@ -65,7 +65,7 @@ export default function EditProfile() {
       <div className="bg-white rounded-2xl border border-gray-200 p-5 text-center space-y-3 shadow-sm">
         {avatarUrl && (
           <div className="w-20 h-20 rounded-full bg-gray-200 mx-auto overflow-hidden">
-            <img src={avatarUrl} className="w-full h-full object-cover" />
+            <img src={avatarUrl} alt="Profile avatar preview" className="w-full h-full object-cover" />
           </div>
         )}
         <div>

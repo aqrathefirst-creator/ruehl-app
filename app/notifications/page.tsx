@@ -78,9 +78,6 @@ export default function NotificationsPage() {
     };
   }, [currentUser]);
 
-  const getUsername = (id: string) =>
-    profiles.find((p) => p.id === id)?.username || 'User';
-
   const getProfile = (id: string) =>
     profiles.find((p) => p.id === id);
 
@@ -135,7 +132,7 @@ export default function NotificationsPage() {
                 }`}
               >
                 {actor?.avatar_url ? (
-                  <img src={actor.avatar_url} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+                  <img src={actor.avatar_url} alt={`${actor.username || 'User'} avatar`} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
                 ) : (
                   <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex-shrink-0" />
                 )}
