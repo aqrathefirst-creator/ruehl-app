@@ -140,7 +140,11 @@ export default function VerifyAccountPage() {
         const response = await fetch('/api/auth/otp/verify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: pending.value, code: code.trim() }),
+          body: JSON.stringify({
+            email: pending.value,
+            code: code.trim(),
+            username: pending.username ?? null,
+          }),
         });
 
         if (!response.ok) {

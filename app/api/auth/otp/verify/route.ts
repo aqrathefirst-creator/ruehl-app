@@ -27,10 +27,12 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => null)) as {
       email?: string;
       code?: string;
+      username?: string | null;
     } | null;
 
     const rawEmail = body?.email?.trim();
     const code = body?.code?.trim();
+    const username = body?.username?.trim() || null;
 
     if (!rawEmail || !code) return jsonError('email and code are required', 400);
     if (!/^\d{6}$/.test(code)) return jsonError('Code must be 6 digits', 400);
@@ -80,6 +82,14 @@ export async function POST(request: Request) {
     });
 
     if (verifyError) return jsonError(verifyError.message || 'Unable to verify account', 500);
+
+    // Upsert profile using service role so username is always persisted, regardless of RLS.
+    if (userId && username) {
+      await supabase.from('profiles').upsert(
+        { id: userId, username, is_verified: true, verified: true },
+        { onConflict: 'id' }
+      );
+    }
 
     await supabase.from('email_verification_otps').delete().eq('email', email);
 
