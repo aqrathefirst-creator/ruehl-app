@@ -33,35 +33,31 @@ export async function PATCH(request: Request) {
   if (!postId) return jsonError('post_id is required', 400);
   if (!action) return jsonError('action is required', 400);
 
-  const patch: Record<string, unknown> = {};
+  const subjectByAction: Record<FeedAction, string> = {
+    boost: 'BOOST_PROMOTE_CONTENT',
+    remove_discovery: 'REMOVE_DISCOVERY',
+    restore_discovery: 'REMOVE_DISCOVERY',
+    override_trending: 'OVERRIDE_CHART',
+    clear_override: 'OTHER',
+  };
 
-  if (action === 'boost') {
-    const hours = Math.max(1, Number(body?.boost_hours || 24));
-    patch.boosted_until = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
-    patch.visibility_state = 'normal';
-  }
+  const notes = [
+    `Feed control action requested: ${action}`,
+    body?.boost_hours ? `boost_hours=${body.boost_hours}` : null,
+  ]
+    .filter(Boolean)
+    .join(' | ');
 
-  if (action === 'remove_discovery') {
-    patch.discovery_disabled = true;
-    patch.visibility_state = 'restricted';
-  }
-
-  if (action === 'restore_discovery') {
-    patch.discovery_disabled = false;
-    patch.visibility_state = 'normal';
-  }
-
-  if (action === 'override_trending') {
-    patch.trending_override = true;
-  }
-
-  if (action === 'clear_override') {
-    patch.trending_override = false;
-    patch.boosted_until = null;
-  }
-
-  const { error } = await auth.admin.from('posts').update(patch).eq('id', postId);
+  const { error } = await auth.admin.from('admin_requests').insert({
+    admin_id: auth.user.id,
+    submitted_by: auth.user.id,
+    subject: subjectByAction[action],
+    target_id: postId,
+    target: postId,
+    notes,
+    status: 'pending',
+  });
   if (error) return jsonError(error.message, 400);
 
-  return jsonOk({ success: true });
+  return jsonOk({ success: true, message: 'Request submitted for approval' });
 }

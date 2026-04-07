@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
   let soundsQuery = auth.admin
     .from('sounds')
-    .select('id, track_name, artist_name, thumbnail_url, preview_url, usage_count, is_enabled, is_trending, category, created_at')
+    .select('id, track_name, artist_name, cover_url, spotify_id, thumbnail_url, preview_url, usage_count, is_enabled, is_trending, category, created_at')
     .order('usage_count', { ascending: false })
     .limit(200);
 
@@ -31,6 +31,8 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     track_name?: string;
     artist_name?: string;
+    cover_url?: string | null;
+    spotify_id?: string | null;
     preview_url?: string | null;
     thumbnail_url?: string | null;
     category?: string | null;
@@ -45,6 +47,8 @@ export async function POST(request: Request) {
     .insert({
       track_name: trackName,
       artist_name: artistName,
+      cover_url: body?.cover_url || null,
+      spotify_id: body?.spotify_id || null,
       preview_url: body?.preview_url || null,
       thumbnail_url: body?.thumbnail_url || null,
       category: body?.category || null,
@@ -52,7 +56,7 @@ export async function POST(request: Request) {
       is_enabled: true,
       is_trending: false,
     })
-    .select('id, track_name, artist_name, preview_url, thumbnail_url, category, usage_count, is_enabled, is_trending, created_at')
+    .select('id, track_name, artist_name, cover_url, spotify_id, preview_url, thumbnail_url, category, usage_count, is_enabled, is_trending, created_at')
     .single();
 
   if (error) return jsonError(error.message, 400);
@@ -67,6 +71,8 @@ export async function PATCH(request: Request) {
     id?: string;
     is_enabled?: boolean;
     is_trending?: boolean;
+    cover_url?: string | null;
+    spotify_id?: string | null;
     category?: string | null;
   } | null;
 
@@ -76,6 +82,8 @@ export async function PATCH(request: Request) {
   const patch: Record<string, unknown> = {};
   if (typeof body?.is_enabled === 'boolean') patch.is_enabled = body.is_enabled;
   if (typeof body?.is_trending === 'boolean') patch.is_trending = body.is_trending;
+  if (body?.cover_url !== undefined) patch.cover_url = body.cover_url;
+  if (body?.spotify_id !== undefined) patch.spotify_id = body.spotify_id;
   if (body?.category !== undefined) patch.category = body.category;
 
   if (Object.keys(patch).length === 0) return jsonError('No patch fields supplied', 400);

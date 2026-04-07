@@ -7,13 +7,38 @@ export async function GET(request: Request) {
 
   const { data, error } = await auth.supabase
     .from('blocked_users')
-    .select('id, blocked_id, created_at, blocked:profiles!blocked_users_blocked_id_fkey(id, username, avatar_url)')
+    .select('id, blocked_id, created_at')
     .eq('blocker_id', auth.user.id)
     .order('created_at', { ascending: false });
 
   if (error) return jsonError(error.message, 400);
 
-  return jsonOk({ items: data || [] });
+  const blockedRows = (data || []) as Array<{ id: string; blocked_id: string; created_at: string }>;
+  const blockedIds = blockedRows.map((row) => row.blocked_id).filter(Boolean);
+
+  let profileById: Record<string, { id: string; username: string; avatar_url: string | null }> = {};
+
+  if (blockedIds.length > 0) {
+    const { data: profilesData } = await auth.supabase
+      .from('profiles')
+      .select('id, username, avatar_url')
+      .in('id', blockedIds);
+
+    profileById = ((profilesData || []) as Array<{ id: string; username: string; avatar_url: string | null }>).reduce(
+      (acc, profile) => {
+        acc[profile.id] = profile;
+        return acc;
+      },
+      {} as Record<string, { id: string; username: string; avatar_url: string | null }>
+    );
+  }
+
+  const items = blockedRows.map((row) => ({
+    ...row,
+    blocked: profileById[row.blocked_id] || null,
+  }));
+
+  return jsonOk({ items });
 }
 
 export async function POST(request: Request) {

@@ -8,6 +8,7 @@ type RankedProfile = {
   id: string
   username: string
   avatar_url?: string | null
+  is_verified?: boolean
   verified?: boolean
   activity_type?: string | null
   rank_score?: number | null
@@ -46,6 +47,8 @@ export default function RankingPage() {
     const index = profiles.findIndex(p => p.id === userId)
     return index === -1 ? null : index + 1
   }
+
+  const isProfileVerified = (profile?: RankedProfile) => Boolean(profile?.is_verified ?? profile?.verified)
 
   return (
     <div className="max-w-xl mx-auto p-4 space-y-6">
@@ -100,7 +103,7 @@ export default function RankingPage() {
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-gray-900 flex items-center gap-1">
                     {p.username}
-                    {p.verified && <VerificationBadge />}
+                    {isProfileVerified(p) && <VerificationBadge />}
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {p.activity_type || 'Active'}

@@ -10,15 +10,34 @@ const STORAGE_KEY = 'ruehl:pending-verification';
 const LAST_SENT_KEY = 'ruehl:pending-verification-last-sent';
 export const VERIFICATION_RESEND_SECONDS = 60;
 
+function readStorage(key: string) {
+  if (typeof window === 'undefined') return null;
+
+  // Prefer durable storage so verification survives tab refresh/new tabs.
+  return window.localStorage.getItem(key) ?? window.sessionStorage.getItem(key);
+}
+
+function writeStorage(key: string, value: string) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(key, value);
+  window.sessionStorage.setItem(key, value);
+}
+
+function removeStorage(key: string) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(key);
+  window.sessionStorage.removeItem(key);
+}
+
 export function savePendingVerification(payload: PendingVerification) {
   if (typeof window === 'undefined') return;
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  writeStorage(STORAGE_KEY, JSON.stringify(payload));
 }
 
 export function loadPendingVerification(): PendingVerification | null {
   if (typeof window === 'undefined') return null;
 
-  const raw = window.sessionStorage.getItem(STORAGE_KEY);
+  const raw = readStorage(STORAGE_KEY);
   if (!raw) return null;
 
   try {
@@ -32,19 +51,19 @@ export function loadPendingVerification(): PendingVerification | null {
 
 export function clearPendingVerification() {
   if (typeof window === 'undefined') return;
-  window.sessionStorage.removeItem(STORAGE_KEY);
-  window.sessionStorage.removeItem(LAST_SENT_KEY);
+  removeStorage(STORAGE_KEY);
+  removeStorage(LAST_SENT_KEY);
 }
 
 export function markVerificationCodeSent(at = Date.now()) {
   if (typeof window === 'undefined') return;
-  window.sessionStorage.setItem(LAST_SENT_KEY, String(at));
+  writeStorage(LAST_SENT_KEY, String(at));
 }
 
 export function getVerificationCooldownSeconds(now = Date.now()) {
   if (typeof window === 'undefined') return 0;
 
-  const raw = window.sessionStorage.getItem(LAST_SENT_KEY);
+  const raw = readStorage(LAST_SENT_KEY);
   if (!raw) return 0;
 
   const lastSent = Number(raw);

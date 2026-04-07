@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, Flame, Calendar, Plus } from 'lucide-react';
+import { Home, Flame, Calendar, Plus, ChartColumn } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
 import { clearCreateUploadState, subscribeToCreateUpload, type CreateUploadSnapshot } from '@/lib/createUploadQueue';
@@ -115,6 +115,7 @@ export default function BottomNav() {
   const tabs = [
     { name: 'Home', path: '/', icon: Home },
     { name: 'Now', path: '/now', icon: Flame },
+    { name: 'Charts', path: '/charts', icon: ChartColumn },
     { name: 'Sessions', path: '/sessions', icon: Calendar },
   ];
 
@@ -133,7 +134,7 @@ export default function BottomNav() {
             if (uploadSnapshot.error) clearCreateUploadState();
             else router.push('/now');
           }}
-          className="fixed bottom-24 left-1/2 -translate-x-1/2 w-[92%] max-w-[430px] z-50 rounded-2xl border border-white/10 bg-black/85 px-4 py-3 text-left shadow-2xl backdrop-blur-md"
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 w-[92%] max-w-[430px] z-50 rounded-2xl border border-white/10 bg-black/85 px-4 py-3 text-left shadow-2xl backdrop-blur-md md:hidden"
         >
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -160,7 +161,7 @@ export default function BottomNav() {
         </button>
       )}
 
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-[430px] backdrop-blur-md bg-black/85 border border-white/[0.08] shadow-2xl rounded-2xl z-50 flex items-center justify-between px-6" style={{ height: 72 }}>
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-[430px] backdrop-blur-md bg-black/85 border border-white/[0.08] shadow-2xl rounded-2xl z-50 flex items-center justify-between px-6 md:hidden" style={{ height: 72 }}>
 
       {/* LEFT SIDE */}
       <div className="flex items-center gap-8">

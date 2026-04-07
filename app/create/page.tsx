@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase, uploadPostMedia, processMedia } from '@/lib/supabase';
 import { startCreateUpload } from '@/lib/createUploadQueue';
 import { clearPrewarmedCameraStream, hasPrewarmedCameraStream, prewarmCameraStream, takePrewarmedCameraStream } from '@/lib/cameraSession';
+import { computeAlignmentScore, inferPostAttributesFromCaption } from '@/lib/alignmentEngine';
+import { computeFinalAlignmentScore, getSoundAdaptiveWeight, updateSoundAdaptiveWeight } from '@/lib/adaptiveAlignment';
 
 type CreateView = 'camera' | 'gallery' | 'editor';
 type FacingMode = 'user' | 'environment';
@@ -37,8 +39,23 @@ type SoundRecord = {
   id: string;
   track_name: string;
   artist_name: string;
+  genre?: string | null;
+  mood?: string | null;
+  energy_level?: number | null;
+  adaptive_weight?: number | null;
   preview_url?: string | null;
+  cover_url?: string | null;
   thumbnail_url?: string | null;
+  chart_rank?: number | null;
+  chart_movement?: string | null;
+  chart_lifecycle?: string | null;
+};
+
+type ChartScoreRecord = {
+  sound_id: string | null;
+  rank: number | null;
+  movement: string | null;
+  lifecycle: string | null;
 };
 
 const RECORDING_MAX_MS = 45_000;
@@ -104,6 +121,30 @@ const isLikelyMobileBrowser = () => {
   return matchesMobileAgent || (hasTouch && mobileSizedViewport);
 };
 
+const movementSymbolForDisplay = (movement: string | null) => {
+  const normalized = (movement || '').trim().toLowerCase();
+  const parsed = Number.parseInt(normalized.replace(/[^\d+-]/g, ''), 10);
+
+  if (normalized.includes('up') || parsed > 0) return '▲';
+  if (normalized.includes('down') || parsed < 0) return '▼';
+  return '—';
+};
+
+const lifecycleLabelForDisplay = (lifecycle: string | null) => {
+  const normalized = (lifecycle || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized === 'birth') return 'new';
+  if (normalized === 'rising') return 'rising';
+  if (normalized === 'peak') return 'peak';
+  if (normalized === 'declining') return 'declining';
+  return normalized;
+};
+
+const getMissingColumnFromError = (message: string) => {
+  const match = message.match(/column\s+"([^"]+)"/i);
+  return match?.[1] || null;
+};
+
 export default function CreatePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -120,6 +161,7 @@ export default function CreatePage() {
   const [trackName, setTrackName] = useState('');
   const [artistName, setArtistName] = useState('');
   const [sounds, setSounds] = useState<SoundRecord[]>([]);
+  const [suggestedSounds, setSuggestedSounds] = useState<SoundRecord[]>([]);
   const [showSounds, setShowSounds] = useState(false);
   const [soundSearch, setSoundSearch] = useState('');
   const [selectedSound, setSelectedSound] = useState<SoundRecord | null>(null);
@@ -170,6 +212,8 @@ export default function CreatePage() {
   const [progress, setProgress] = useState(0);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [contributionFeedback, setContributionFeedback] = useState<{ soundName: string; rank: number | null; movement: string | null } | null>(null);
 
   const showPortraitGuard = view === 'camera' && isMobileCapture && isLandscapeViewport;
 
@@ -755,12 +799,148 @@ export default function CreatePage() {
       .order('usage_count', { ascending: false })
       .limit(60);
 
-    setSounds((data || []) as SoundRecord[]);
+    const baseSounds = ((data || []) as SoundRecord[]);
+    const soundIds = baseSounds.map((sound) => sound.id).filter(Boolean);
+
+    if (soundIds.length === 0) {
+      setSounds(baseSounds);
+      return;
+    }
+
+    const { data: chartRows } = await supabase
+      .from('chart_scores')
+      .select('sound_id, rank, movement, lifecycle')
+      .in('sound_id', soundIds)
+      .gte('rank', 1)
+      .lte('rank', 20);
+
+    const chartBySoundId = (((chartRows as unknown) as ChartScoreRecord[] | null) || []).reduce<Record<string, ChartScoreRecord>>(
+      (acc, row) => {
+        if (!row.sound_id || typeof row.rank !== 'number') return acc;
+        const existing = acc[row.sound_id];
+        if (!existing || (existing.rank ?? 999) > row.rank) {
+          acc[row.sound_id] = row;
+        }
+        return acc;
+      },
+      {}
+    );
+
+    setSounds(
+      baseSounds.map((sound) => {
+        const chart = chartBySoundId[sound.id];
+        return {
+          ...sound,
+          chart_rank: chart?.rank ?? null,
+          chart_movement: chart?.movement ?? null,
+          chart_lifecycle: chart?.lifecycle ?? null,
+        };
+      })
+    );
   };
 
   useEffect(() => {
     void loadSounds();
   }, []);
+
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => {
+      setCurrentUserId(data.user?.id || null);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!sounds.length) return;
+
+    const soundId = searchParams.get('soundId');
+    const track = (searchParams.get('track') || '').trim();
+    const artist = (searchParams.get('artist') || '').trim();
+
+    if (soundId) {
+      const fromId = sounds.find((sound) => sound.id === soundId);
+      if (fromId) {
+        setSelectedSound(fromId);
+        setTrackName(fromId.track_name || '');
+        setArtistName(fromId.artist_name || '');
+        setActiveTool('sound');
+        return;
+      }
+    }
+
+    if (track) {
+      const fromMeta = sounds.find((sound) => {
+        const sameTrack = (sound.track_name || '').trim().toLowerCase() === track.toLowerCase();
+        const sameArtist = !artist || (sound.artist_name || '').trim().toLowerCase() === artist.toLowerCase();
+        return sameTrack && sameArtist;
+      });
+
+      if (fromMeta) {
+        setSelectedSound(fromMeta);
+        setTrackName(fromMeta.track_name || '');
+        setArtistName(fromMeta.artist_name || '');
+        setActiveTool('sound');
+      }
+    }
+  }, [searchParams, sounds]);
+
+  useEffect(() => {
+    if (!sounds.length || !currentUserId) return;
+
+    const loadSuggested = async () => {
+      const [{ data: savedRows }, { data: activityRows }, { data: postRows }] = await Promise.all([
+        supabase
+          .from('saved_sounds')
+          .select('sound_id')
+          .eq('user_id', currentUserId)
+          .limit(200),
+        supabase
+          .from('user_activity')
+          .select('target_id, type')
+          .eq('user_id', currentUserId)
+          .in('type', ['use_sound', 'save', 'lift'])
+          .limit(300),
+        supabase
+          .from('posts')
+          .select('genre')
+          .eq('user_id', currentUserId)
+          .limit(120),
+      ]);
+
+      const favoredSoundIds = new Set<string>([
+        ...(((savedRows || []) as Array<{ sound_id: string | null }>).map((row) => row.sound_id).filter((id): id is string => Boolean(id))),
+        ...(((activityRows || []) as Array<{ target_id: string | null }>).map((row) => row.target_id).filter((id): id is string => Boolean(id))),
+      ]);
+
+      const favoredGenres = new Set(
+        (((postRows || []) as Array<{ genre?: string | null }>)
+          .map((row) => (row.genre || '').trim().toLowerCase())
+          .filter(Boolean))
+      );
+
+      const ranked = sounds
+        .map((sound) => {
+          const rank = sound.chart_rank || 99;
+          const movement = (sound.chart_movement || '').toLowerCase();
+          const rising = movement.includes('up') || movement.includes('+') || rank <= 10;
+
+          let score = 0;
+          if (favoredSoundIds.has(sound.id)) score += 4;
+          if (favoredGenres.has((sound.genre || '').trim().toLowerCase())) score += 3;
+          if (rising) score += 2;
+          if (typeof sound.chart_rank === 'number') score += Math.max(0, 21 - sound.chart_rank) * 0.05;
+
+          return { sound, score };
+        })
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8)
+        .map((item) => item.sound);
+
+      setSuggestedSounds(ranked);
+    };
+
+    void loadSuggested();
+  }, [currentUserId, sounds]);
 
   useEffect(() => {
     setIsMobileCapture(isLikelyMobileBrowser());
@@ -1570,6 +1750,9 @@ export default function CreatePage() {
 
       if (missingColumnMatch?.[1]) {
         const column = missingColumnMatch[1];
+        if (column === 'alignment_score') {
+          throw new Error('alignment_score column is required before creating posts.');
+        }
         if (column in candidate) {
           delete candidate[column];
           continue;
@@ -1580,6 +1763,129 @@ export default function CreatePage() {
     }
 
     throw new Error('Unable to insert post payload after fallback attempts.');
+  };
+
+  const createSoundWithFallback = async (payload: Record<string, any>) => {
+    const candidate = { ...payload };
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const { data, error } = await supabase
+        .from('sounds')
+        .insert(candidate)
+        .select('id, usage_count, track_name, artist_name, preview_url, cover_url, thumbnail_url, genre, mood, energy_level')
+        .single();
+
+      if (!error) return data as Record<string, any>;
+
+      const missingColumn = getMissingColumnFromError(error.message || '');
+      if (missingColumn && missingColumn in candidate) {
+        delete candidate[missingColumn];
+        continue;
+      }
+
+      throw error;
+    }
+
+    throw new Error('Unable to create sound after fallback attempts.');
+  };
+
+  const updateSoundWithFallback = async (soundId: string, patch: Record<string, any>) => {
+    const candidate = { ...patch };
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const { error } = await supabase.from('sounds').update(candidate).eq('id', soundId);
+
+      if (!error) return;
+
+      const missingColumn = getMissingColumnFromError(error.message || '');
+      if (missingColumn && missingColumn in candidate) {
+        delete candidate[missingColumn];
+        continue;
+      }
+
+      throw error;
+    }
+
+    throw new Error('Unable to update sound after fallback attempts.');
+  };
+
+  const insertChartScoreWithFallback = async (payload: Record<string, any>) => {
+    const candidate = { ...payload };
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const { error } = await supabase.from('chart_scores').insert(candidate);
+
+      if (!error) return;
+
+      const missingColumn = getMissingColumnFromError(error.message || '');
+      if (missingColumn && missingColumn in candidate) {
+        delete candidate[missingColumn];
+        continue;
+      }
+
+      throw error;
+    }
+
+    throw new Error('Unable to insert chart score after fallback attempts.');
+  };
+
+  const updateChartScoreWithFallback = async (soundId: string, patch: Record<string, any>) => {
+    const candidate = { ...patch };
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const { error } = await supabase.from('chart_scores').update(candidate).eq('sound_id', soundId);
+
+      if (!error) return;
+
+      const missingColumn = getMissingColumnFromError(error.message || '');
+      if (missingColumn && missingColumn in candidate) {
+        delete candidate[missingColumn];
+        continue;
+      }
+
+      throw error;
+    }
+
+    throw new Error('Unable to update chart score after fallback attempts.');
+  };
+
+  const touchChartScoreForSound = async (soundId: string) => {
+    const nowIso = new Date().toISOString();
+
+    const { data: existingRow, error: existingError } = await supabase
+      .from('chart_scores')
+      .select('sound_id')
+      .eq('sound_id', soundId)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingError && existingError.code !== 'PGRST116') throw existingError;
+
+    if (existingRow) {
+      await updateChartScoreWithFallback(soundId, { updated_at: nowIso });
+      return;
+    }
+
+    const insertCandidates: Array<Record<string, any>> = [
+      { sound_id: soundId, rank: 20, movement: '+0', lifecycle: 'birth', updated_at: nowIso },
+      { sound_id: soundId, rank: 20, updated_at: nowIso },
+      { sound_id: soundId, updated_at: nowIso },
+      { sound_id: soundId },
+    ];
+
+    for (const candidate of insertCandidates) {
+      try {
+        await insertChartScoreWithFallback(candidate);
+        return;
+      } catch (error: any) {
+        if (error?.code === '23505') {
+          await updateChartScoreWithFallback(soundId, { updated_at: nowIso });
+          return;
+        }
+      }
+    }
+
+    throw new Error('Unable to sync chart score for sound.');
   };
 
   const handlePost = async () => {
@@ -1601,6 +1907,7 @@ export default function CreatePage() {
     setPosting(true);
     setSuccess(false);
     setProgress(8);
+    setContributionFeedback(null);
 
     const tempPost = {
       id: `temp-${Date.now()}`,
@@ -1611,6 +1918,9 @@ export default function CreatePage() {
       track_name: trackName,
       artist_name: artistName,
       genre: selectedGenre,
+      mood: null,
+      activity: null,
+      alignment_score: 0,
       is_temp: true,
     };
 
@@ -1658,6 +1968,14 @@ export default function CreatePage() {
       startCreateUpload(async ({ setProgress: setBackgroundProgress, retry }) => {
         let mediaUrl: string | null = null;
         let thumbnailUrl: string | null = null;
+        const requestedTrack = (selectedSound?.track_name || trackName || '').trim();
+        const requestedArtist = (selectedSound?.artist_name || artistName || '').trim();
+        const requestedPreviewUrl = selectedSound?.preview_url || null;
+        const requestedCoverUrl = selectedSound?.cover_url || selectedSound?.thumbnail_url || null;
+        const inferred = inferPostAttributesFromCaption(caption || '');
+        const resolvedGenre = selectedGenre || null;
+        const resolvedMood = inferred.mood || null;
+        const resolvedActivity = inferred.activity || null;
 
         if (preparedMediaFile) {
           setBackgroundProgress(20, 'Uploading media...');
@@ -1671,18 +1989,29 @@ export default function CreatePage() {
 
         let soundId: string | null = null;
 
-        if (selectedSound || trackName) {
+        if (selectedSound || requestedTrack) {
           setBackgroundProgress(62, 'Syncing sound...');
-          const requestedTrack = selectedSound?.track_name || trackName;
-          const requestedArtist = selectedSound?.artist_name || artistName;
+          if (!requestedTrack) throw new Error('track_name is required to create or attach a sound.');
 
           const existing = await retry('Sound lookup', async () => {
+            if (selectedSound?.id) {
+              const { data, error } = await supabase
+                .from('sounds')
+                .select('id, usage_count, track_name, artist_name, preview_url, cover_url, thumbnail_url, genre, mood, energy_level')
+                .eq('id', selectedSound.id)
+                .maybeSingle();
+
+              if (error && error.code !== 'PGRST116') throw error;
+              if (data) return data;
+            }
+
             const { data, error } = await supabase
               .from('sounds')
-              .select('*')
+              .select('id, usage_count, track_name, artist_name, preview_url, cover_url, thumbnail_url, genre, mood, energy_level')
               .eq('track_name', requestedTrack)
               .eq('artist_name', requestedArtist)
-              .single();
+              .limit(1)
+              .maybeSingle();
 
             if (error && error.code !== 'PGRST116') throw error;
             return data;
@@ -1691,28 +2020,31 @@ export default function CreatePage() {
           if (existing) {
             soundId = existing.id;
             await retry('Sound update', async () => {
-              const { error } = await supabase
-                .from('sounds')
-                .update({ usage_count: (existing.usage_count || 0) + 1 })
-                .eq('id', existing.id);
-
-              if (error) throw error;
+              await updateSoundWithFallback(existing.id, {
+                usage_count: (existing.usage_count || 0) + 1,
+                track_name: requestedTrack,
+                artist_name: requestedArtist,
+                preview_url: existing.preview_url || requestedPreviewUrl,
+                cover_url: existing.cover_url || requestedCoverUrl,
+                thumbnail_url: existing.thumbnail_url || requestedCoverUrl,
+                genre: existing.genre || resolvedGenre,
+                mood: existing.mood || resolvedMood,
+                energy_level: existing.energy_level || null,
+              });
             });
           } else {
             const createdSound = await retry('Sound create', async () => {
-              const { data, error } = await supabase
-                .from('sounds')
-                .insert({
-                  track_name: requestedTrack,
-                  artist_name: requestedArtist,
-                  usage_count: 1,
-                  thumbnail_url: selectedSound?.thumbnail_url || null,
-                })
-                .select()
-                .single();
-
-              if (error) throw error;
-              return data;
+              return createSoundWithFallback({
+                track_name: requestedTrack,
+                artist_name: requestedArtist,
+                preview_url: requestedPreviewUrl,
+                cover_url: requestedCoverUrl,
+                thumbnail_url: requestedCoverUrl,
+                genre: resolvedGenre,
+                mood: resolvedMood,
+                energy_level: null,
+                usage_count: 1,
+              });
             });
 
             soundId = createdSound?.id || null;
@@ -1721,16 +2053,38 @@ export default function CreatePage() {
 
         setBackgroundProgress(82, 'Publishing post...');
 
+        const alignmentScore = computeAlignmentScore(
+          {
+            genre: resolvedGenre,
+            mood: resolvedMood,
+            activity: resolvedActivity,
+          },
+          {
+            genre: selectedSound?.genre || resolvedGenre,
+            mood: selectedSound?.mood || resolvedMood,
+            energy_level: selectedSound?.energy_level || null,
+          }
+        );
+
+        const adaptiveWeight = soundId ? await getSoundAdaptiveWeight(supabase as any, soundId) : 1;
+        const finalAlignmentScore = computeFinalAlignmentScore(alignmentScore, adaptiveWeight);
+
         const payload: Record<string, any> = {
           content: caption,
           user_id: user.id,
           media_url: isPowr ? null : mediaUrl,
           audio_url: selectedSound?.preview_url || null,
           thumbnail_url: thumbnailUrl,
-          track_name: selectedSound?.track_name || trackName,
-          artist_name: selectedSound?.artist_name || artistName,
+          track_name: requestedTrack,
+          artist_name: requestedArtist,
           sound_id: soundId,
-          genre: selectedGenre,
+          genre: resolvedGenre,
+          mood: resolvedMood,
+          activity: resolvedActivity,
+          alignment_score: finalAlignmentScore,
+          likes_count: 0,
+          comments_count: 0,
+          lifts_count: 0,
           hashtags,
           mentions,
           filter_name: selectedFilter,
@@ -1745,6 +2099,25 @@ export default function CreatePage() {
         };
 
         await retry('Post publish', () => insertPostWithFallback(payload));
+
+        if (soundId) {
+          setBackgroundProgress(92, 'Updating charts...');
+          await retry('Chart sync', () => touchChartScoreForSound(soundId as string));
+          await retry('Adaptive sync', () => updateSoundAdaptiveWeight(supabase as any, soundId as string));
+
+          const { data: scoreRow } = await supabase
+            .from('chart_scores')
+            .select('rank, movement')
+            .eq('sound_id', soundId)
+            .maybeSingle();
+
+          setContributionFeedback({
+            soundName: requestedTrack,
+            rank: (scoreRow as { rank?: number | null } | null)?.rank ?? null,
+            movement: (scoreRow as { movement?: string | null } | null)?.movement ?? null,
+          });
+        }
+
         localStorage.removeItem('optimistic_post');
       });
 
@@ -2395,6 +2768,11 @@ export default function CreatePage() {
                   >
                     {selectedSound ? `${selectedSound.track_name} - ${selectedSound.artist_name}` : 'Add Sound'}
                   </button>
+                  {selectedSound && typeof selectedSound.chart_rank === 'number' && (
+                    <div className="text-[11px] text-white/60">
+                      #{selectedSound.chart_rank} {movementSymbolForDisplay(selectedSound.chart_movement ?? null)} {lifecycleLabelForDisplay(selectedSound.chart_lifecycle ?? null)}
+                    </div>
+                  )}
                   <label className="block">Original audio</label>
                   <input
                     type="range"
@@ -2421,6 +2799,27 @@ export default function CreatePage() {
                       src={selectedSound.preview_url}
                       loop
                     />
+                  )}
+                  {suggestedSounds.length > 0 && (
+                    <div className="pt-1">
+                      <div className="mb-1 text-[11px] text-white/60">Sounds you should use</div>
+                      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                        {suggestedSounds.slice(0, 6).map((sound) => (
+                          <button
+                            key={`suggest-${sound.id}`}
+                            type="button"
+                            onClick={() => {
+                              setSelectedSound(sound)
+                              setTrackName(sound.track_name || '')
+                              setArtistName(sound.artist_name || '')
+                            }}
+                            className="shrink-0 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[11px] text-white/90"
+                          >
+                              {sound.track_name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -2489,6 +2888,29 @@ export default function CreatePage() {
                 className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-sm mb-3"
               />
 
+              {suggestedSounds.length > 0 && !soundSearch.trim() && (
+                <div className="mb-3">
+                  <div className="mb-2 text-[11px] text-white/60">Recommended for you</div>
+                  <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                    {suggestedSounds.slice(0, 8).map((sound) => (
+                      <button
+                        key={`modal-suggest-${sound.id}`}
+                        type="button"
+                        onClick={() => {
+                          setSelectedSound(sound)
+                          setTrackName(sound.track_name || '')
+                          setArtistName(sound.artist_name || '')
+                          setShowSounds(false)
+                        }}
+                        className="shrink-0 rounded-full border border-cyan-300/35 bg-cyan-400/10 px-2.5 py-1 text-[11px] text-cyan-200"
+                      >
+                        {sound.track_name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {visibleSounds.map((sound) => (
                 <button
                   key={sound.id}
@@ -2512,6 +2934,11 @@ export default function CreatePage() {
                   <div className="truncate">
                     <div className="font-medium truncate">{sound.track_name}</div>
                     <div className="text-xs text-gray-400 truncate">{sound.artist_name}</div>
+                    {typeof sound.chart_rank === 'number' && (
+                      <div className="text-[11px] text-white/55 mt-0.5 truncate">
+                        #{sound.chart_rank} {movementSymbolForDisplay(sound.chart_movement ?? null)} {lifecycleLabelForDisplay(sound.chart_lifecycle ?? null)}
+                      </div>
+                    )}
                   </div>
                 </button>
               ))}
@@ -2546,7 +2973,24 @@ export default function CreatePage() {
                 <div className="text-xs text-white/70">{progress}%</div>
               </>
             ) : (
-              <div className="text-lg font-semibold animate-pulse">Posted</div>
+              <div className="space-y-2 text-center">
+                <div className="text-lg font-semibold animate-pulse">Posted</div>
+                {contributionFeedback && (
+                  <div className="text-xs text-white/75">
+                    You moved {contributionFeedback.soundName}
+                    {typeof contributionFeedback.rank === 'number' ? ` to #${contributionFeedback.rank}` : ''}
+                    {contributionFeedback.movement ? ` (${contributionFeedback.movement})` : ''}
+                  </div>
+                )}
+                {contributionFeedback && (
+                  (() => {
+                    const movement = (contributionFeedback.movement || '').toLowerCase();
+                    const gainedInfluence = movement.includes('up') || movement.includes('+') || (typeof contributionFeedback.rank === 'number' && contributionFeedback.rank <= 10);
+                    if (!gainedInfluence) return null;
+                    return <div className="text-xs text-cyan-200">This post increased your influence</div>;
+                  })()
+                )}
+              </div>
             )}
           </div>
         )}

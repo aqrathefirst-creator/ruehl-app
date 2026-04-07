@@ -63,6 +63,11 @@ export async function POST(request: Request) {
     const email = normalizeEmail(rawEmail);
     if (!isValidEmail(email)) return jsonError('Invalid email address', 400);
 
+    const hasOtpProvider = Boolean(process.env.RESEND_API_KEY && (process.env.OTP_FROM_EMAIL || process.env.RESEND_FROM_EMAIL));
+    if (!hasOtpProvider) {
+      return jsonError('Email OTP is unavailable. Configure RESEND_API_KEY and OTP_FROM_EMAIL.', 503);
+    }
+
     const secret = resolveOtpSecret();
 
     const supabase = createServiceRoleSupabase();

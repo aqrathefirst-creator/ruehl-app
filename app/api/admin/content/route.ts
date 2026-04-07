@@ -311,133 +311,39 @@ export async function PATCH(request: Request) {
   if (!postId) return jsonError('post_id is required', 400);
   if (!action) return jsonError('action is required', 400);
 
-  const { data: beforePost, error: beforeError } = await auth.admin
-    .from('posts')
-    .select('id, visibility_state, moderation_state, discovery_disabled, hidden_by_admin, trending_override, boosted_until')
-    .eq('id', postId)
-    .maybeSingle();
+  const subjectByAction: Record<ContentAction, string> = {
+    delete: 'DELETE_CONTENT',
+    hide: 'REMOVE_DISCOVERY',
+    restrict: 'REMOVE_DISCOVERY',
+    mark_safe: 'OTHER',
+    flag_manual: 'OTHER',
+    set_visibility: 'REMOVE_DISCOVERY',
+    boost: 'BOOST_PROMOTE_CONTENT',
+    remove_discovery: 'REMOVE_DISCOVERY',
+    reduce_reach: 'REMOVE_DISCOVERY',
+    force_now_feed: 'BOOST_PROMOTE_CONTENT',
+    clear_override: 'OTHER',
+  };
 
-  if (beforeError) return jsonError(beforeError.message, 400);
-  if (!beforePost) return jsonError('Post not found', 404);
+  const notes = [
+    `Content action requested: ${action}`,
+    body?.visibility_state ? `visibility_state=${body.visibility_state}` : null,
+    body?.note ? `note=${body.note}` : null,
+  ]
+    .filter(Boolean)
+    .join(' | ');
 
-  const patch: Record<string, unknown> = {};
-
-  if (action === 'delete') {
-    await writeContentAudit(auth, postId, action, { note: body?.note || null, before: beforePost });
-    const { error } = await auth.admin.from('posts').delete().eq('id', postId);
-    if (error) return jsonError(error.message, 400);
-    return jsonOk({ success: true });
-  }
-
-  if (action === 'hide') {
-    patch.hidden_by_admin = true;
-    patch.moderation_state = 'flagged';
-    patch.visibility_state = 'hidden';
-  }
-
-  if (action === 'restrict') {
-    patch.discovery_disabled = true;
-    patch.moderation_state = 'flagged';
-    patch.visibility_state = 'restricted';
-  }
-
-  if (action === 'mark_safe') {
-    patch.hidden_by_admin = false;
-    patch.discovery_disabled = false;
-    patch.moderation_state = 'safe';
-    patch.visibility_state = 'normal';
-
-    const markReports = await auth.admin
-      .from('user_reports')
-      .update({
-        admin_status: 'resolved',
-        admin_action: 'mark_safe',
-        resolved_at: new Date().toISOString(),
-        resolved_by: auth.user.id,
-      })
-      .eq('target_post_id', postId)
-      .eq('admin_status', 'pending');
-
-    if (markReports.error && !isMissingRelationError(markReports.error)) {
-      return jsonError(markReports.error.message, 400);
-    }
-  }
-
-  if (action === 'flag_manual') {
-    patch.moderation_state = 'flagged';
-  }
-
-  if (action === 'set_visibility') {
-    const nextState = body?.visibility_state;
-    if (!nextState) return jsonError('visibility_state is required', 400);
-    patch.visibility_state = nextState;
-
-    if (nextState === 'normal') {
-      patch.hidden_by_admin = false;
-      patch.discovery_disabled = false;
-    }
-
-    if (nextState === 'restricted') {
-      patch.discovery_disabled = true;
-      patch.hidden_by_admin = false;
-    }
-
-    if (nextState === 'hidden') {
-      patch.hidden_by_admin = true;
-    }
-
-    if (nextState === 'removed') {
-      patch.hidden_by_admin = true;
-      patch.discovery_disabled = true;
-      patch.moderation_state = 'flagged';
-    }
-  }
-
-  if (action === 'boost') {
-    patch.boosted_until = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    patch.trending_override = true;
-    patch.visibility_state = 'normal';
-    patch.discovery_disabled = false;
-    patch.hidden_by_admin = false;
-  }
-
-  if (action === 'remove_discovery') {
-    patch.discovery_disabled = true;
-  }
-
-  if (action === 'reduce_reach') {
-    patch.discovery_disabled = true;
-    patch.visibility_state = 'restricted';
-  }
-
-  if (action === 'force_now_feed') {
-    patch.trending_override = true;
-    patch.boosted_until = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
-  }
-
-  if (action === 'clear_override') {
-    patch.trending_override = false;
-    patch.boosted_until = null;
-  }
-
-  if (Object.keys(patch).length === 0) {
-    return jsonError('Unsupported action', 400);
-  }
-
-  const { data: updated, error } = await auth.admin
-    .from('posts')
-    .update(patch)
-    .eq('id', postId)
-    .select('id, visibility_state, moderation_state, discovery_disabled, hidden_by_admin, trending_override, boosted_until')
-    .single();
+  const { error } = await auth.admin.from('admin_requests').insert({
+    admin_id: auth.user.id,
+    submitted_by: auth.user.id,
+    subject: subjectByAction[action],
+    target_id: postId,
+    target: postId,
+    notes,
+    status: 'pending',
+  });
 
   if (error) return jsonError(error.message, 400);
 
-  await writeContentAudit(auth, postId, action, {
-    note: body?.note || null,
-    before: beforePost,
-    after: updated,
-  });
-
-  return jsonOk({ success: true, post: updated });
+  return jsonOk({ success: true, message: 'Request submitted for approval' });
 }

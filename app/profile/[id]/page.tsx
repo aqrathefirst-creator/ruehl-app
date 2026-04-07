@@ -4,13 +4,17 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase, processMedia } from '@/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
+import Image from 'next/image';
 import VerificationBadge from '@/components/VerificationBadge';
+import CreatorBadge from '@/components/CreatorBadge';
 
 type Profile = {
   id: string;
   username: string;
   avatar_url: string | null;
   bio?: string | null;
+  is_creator?: boolean | null;
+  is_verified?: boolean;
   verified?: boolean;
 };
 
@@ -20,6 +24,22 @@ type Post = {
   media_url?: string | null;
   media_urls?: string[] | null;
   user_id: string;
+  created_at?: string | null;
+  sound_id?: string | null;
+};
+
+type ChartImpact = {
+  movementsInfluenced: number;
+  soundsBoosted: number;
+  soundsEnteredCharts: number;
+  highestChartPosition: number | null;
+};
+
+type ChartScoreImpactRow = {
+  sound_id: string | null;
+  rank: number | null;
+  movement: string | null;
+  lifecycle: string | null;
 };
 
 type Lift = {
@@ -55,7 +75,8 @@ async function withAuthFetch(path: string, options: RequestInit = {}) {
 
 export default function Page() {
   const params = useParams();
-  const routeId = params?.id as string;
+  const routeId = String((params?.id || params?.username || '') as string);
+  const routeIdLower = routeId.trim().toLowerCase();
 
   const router = useRouter();
 
@@ -85,6 +106,15 @@ export default function Page() {
   const [lifts, setLifts] = useState<Lift[]>([]);
   const [replyInputs, setReplyInputs] = useState<any>({});
   const [newPowr, setNewPowr] = useState('');
+  const [chartImpact, setChartImpact] = useState<ChartImpact>({
+    movementsInfluenced: 0,
+    soundsBoosted: 0,
+    soundsEnteredCharts: 0,
+    highestChartPosition: null,
+  });
+  const [influenceScore, setInfluenceScore] = useState(0);
+  const [influenceLabel, setInfluenceLabel] = useState<'Low' | 'Rising' | 'Strong' | 'Dominant'>('Low');
+  const [ownsTrendSignal, setOwnsTrendSignal] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
   const [commentScroll, setCommentScroll] = useState(0);
@@ -136,6 +166,13 @@ export default function Page() {
       return;
     }
 
+    const canonicalUsername = (profileData.username || '').trim().toLowerCase();
+    const onLegacyProfileRoute = Boolean(params?.id);
+    if (canonicalUsername && (onLegacyProfileRoute || canonicalUsername !== routeIdLower)) {
+      router.replace(`/${canonicalUsername}`);
+      return;
+    }
+
     const targetProfileId = profileData.id;
     setResolvedProfileId(targetProfileId);
 
@@ -146,11 +183,138 @@ export default function Page() {
     const { data: postsData } = await supabase
       .from('posts')
       .select('*')
-      .eq('user_id', targetProfileId);
+      .eq('user_id', targetProfileId)
+      .order('created_at', { ascending: false });
+
+    const soundIds = [...new Set(((postsData || []) as Post[])
+      .map((post) => post.sound_id)
+      .filter((soundId): soundId is string => typeof soundId === 'string' && !!soundId))];
+
+    let movementsInfluenced = 0;
+    let soundsBoosted = 0;
+    let soundsEnteredCharts = 0;
+    let highestChartPosition: number | null = null;
+    let trendOwnership = false;
+
+    if (soundIds.length > 0) {
+      const { data: chartRows } = await supabase
+        .from('chart_scores')
+        .select('sound_id, rank, movement, lifecycle')
+        .in('sound_id', soundIds);
+
+      const chartBySoundId = (((chartRows as unknown) as ChartScoreImpactRow[] | null) || []).reduce<Record<string, ChartScoreImpactRow>>(
+        (acc, row) => {
+          if (!row.sound_id) return acc;
+          const existing = acc[row.sound_id];
+          const existingRank = existing?.rank ?? Number.POSITIVE_INFINITY;
+          const nextRank = row.rank ?? Number.POSITIVE_INFINITY;
+
+          if (!existing || nextRank < existingRank) {
+            acc[row.sound_id] = row;
+          }
+
+          return acc;
+        },
+        {}
+      );
+
+      soundsEnteredCharts = Object.values(chartBySoundId).filter((row) => {
+        const rank = row.rank;
+        return typeof rank === 'number' && rank >= 1 && rank <= 20;
+      }).length;
+
+      highestChartPosition = Object.values(chartBySoundId).reduce<number | null>((best, row) => {
+        const rank = row.rank;
+        if (typeof rank !== 'number' || rank <= 0) return best;
+        if (best === null) return rank;
+        return rank < best ? rank : best;
+      }, null);
+
+      const boostedSoundIds = Object.entries(chartBySoundId)
+        .filter(([, row]) => {
+          const movementRaw = (row.movement || '').trim().toLowerCase();
+          const movementValue = Number.parseInt(movementRaw.replace(/[^\d+-]/g, ''), 10);
+          const isRisingMovement = movementRaw.includes('up') || (!Number.isNaN(movementValue) && movementValue > 0);
+          const isRisingLifecycle = (row.lifecycle || '').trim().toLowerCase() === 'rising';
+          return isRisingMovement || isRisingLifecycle;
+        })
+        .map(([soundId]) => soundId);
+
+      soundsBoosted = boostedSoundIds.length;
+
+      movementsInfluenced = ((postsData || []) as Post[]).filter((post) => {
+        if (!post.sound_id) return false;
+        const chartRow = chartBySoundId[post.sound_id];
+        if (!chartRow) return false;
+
+        const movementRaw = (chartRow.movement || '').trim().toLowerCase();
+        const movementValue = Number.parseInt(movementRaw.replace(/[^\d+-]/g, ''), 10);
+        const isRisingMovement = movementRaw.includes('up') || (!Number.isNaN(movementValue) && movementValue > 0);
+        const isRisingLifecycle = (chartRow.lifecycle || '').trim().toLowerCase() === 'rising';
+
+        return isRisingMovement || isRisingLifecycle;
+      }).length;
+
+      const { data: soundPostsData } = await supabase
+        .from('posts')
+        .select('sound_id, user_id, likes_count, comments_count')
+        .in('sound_id', soundIds)
+        .not('sound_id', 'is', null);
+
+      const perSoundUserContribution = ((soundPostsData || []) as Array<{ sound_id: string | null; user_id: string | null; likes_count?: number | null; comments_count?: number | null }>)
+        .reduce<Record<string, Record<string, number>>>((acc, row) => {
+          if (!row.sound_id || !row.user_id) return acc;
+          if (!acc[row.sound_id]) acc[row.sound_id] = {};
+          const score = 0.5 + ((row.likes_count || 0) + (row.comments_count || 0)) * 0.5;
+          acc[row.sound_id][row.user_id] = (acc[row.sound_id][row.user_id] || 0) + score;
+          return acc;
+        }, {});
+
+      trendOwnership = Object.values(perSoundUserContribution).some((userScores) => {
+        const sorted = Object.entries(userScores).sort((a, b) => b[1] - a[1]);
+        return sorted[0]?.[0] === targetProfileId;
+      });
+    }
 
     const { data: commentsData } = await supabase.from('comments').select('*');
     const { data: likesData } = await supabase.from('likes').select('*');
     const { data: liftsData } = await supabase.from('post_lifts').select('*');
+
+    const soundPostIds = (((postsData || []) as Post[])
+      .filter((post) => !!post.sound_id)
+      .map((post) => post.id));
+
+    const likeCountByPost = ((likesData || []) as Array<{ post_id?: string | null }>).reduce<Record<string, number>>((acc, row) => {
+      const postId = row.post_id || '';
+      if (!postId) return acc;
+      acc[postId] = (acc[postId] || 0) + 1;
+      return acc;
+    }, {});
+
+    const commentCountByPost = ((commentsData || []) as Array<{ post_id?: string | null }>).reduce<Record<string, number>>((acc, row) => {
+      const postId = row.post_id || '';
+      if (!postId) return acc;
+      acc[postId] = (acc[postId] || 0) + 1;
+      return acc;
+    }, {});
+
+    const liftCountByPost = ((liftsData || []) as Array<{ post_id?: string | null }>).reduce<Record<string, number>>((acc, row) => {
+      const postId = row.post_id || '';
+      if (!postId) return acc;
+      acc[postId] = (acc[postId] || 0) + 1;
+      return acc;
+    }, {});
+
+    const engagementGeneratedOnSounds = soundPostIds.reduce((sum, postId) => {
+      return sum + (likeCountByPost[postId] || 0) + (commentCountByPost[postId] || 0) + (liftCountByPost[postId] || 0);
+    }, 0);
+
+    const computedInfluenceScore = engagementGeneratedOnSounds + movementsInfluenced;
+    const computedInfluenceLabel: 'Low' | 'Rising' | 'Strong' | 'Dominant' =
+      computedInfluenceScore >= 260 ? 'Dominant'
+        : computedInfluenceScore >= 120 ? 'Strong'
+          : computedInfluenceScore >= 40 ? 'Rising'
+            : 'Low';
 
     const { data: followersData } = await supabase
       .from('follows')
@@ -216,6 +380,15 @@ export default function Page() {
     setLikedPowrPosts(likedPowrData || []);
     setLiftedPowrPosts(liftedPowrData || []);
     setLifts((liftsData || []) as Lift[]);
+    setChartImpact({
+      movementsInfluenced,
+      soundsBoosted,
+      soundsEnteredCharts,
+      highestChartPosition,
+    });
+    setInfluenceScore(computedInfluenceScore);
+    setInfluenceLabel(computedInfluenceLabel);
+    setOwnsTrendSignal(trendOwnership);
 
     if (userData.user) {
       const { data: followData } = await supabase
@@ -227,6 +400,14 @@ export default function Page() {
 
       setIsFollowing(!!followData);
     }
+  };
+
+  const sortPostsByNewest = (items: Post[]) => {
+    return [...items].sort((a, b) => {
+      const aTs = new Date(a.created_at || 0).getTime();
+      const bTs = new Date(b.created_at || 0).getTime();
+      return bTs - aTs;
+    });
   };
 
   useEffect(() => {
@@ -259,17 +440,91 @@ export default function Page() {
         { event: '*', schema: 'public', table: 'post_lifts' },
         () => fetchData()
       )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'posts' },
-        () => fetchData()
-      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [routeId]);
+
+  useEffect(() => {
+    if (!resolvedProfileId) return;
+
+    const channel = supabase
+      .channel(`profile-posts-realtime:${resolvedProfileId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'posts' },
+        (payload) => {
+          const incoming = payload.new as Post;
+          if (!incoming?.id || incoming.user_id !== resolvedProfileId) return;
+
+          setPosts((prev) => {
+            if (prev.some((item) => item.id === incoming.id)) return prev;
+            return sortPostsByNewest([incoming, ...prev]);
+          });
+
+          const incomingHasMedia = getPostMediaItems(incoming).length > 0;
+          if (!incomingHasMedia) {
+            setPowrPosts((prev) => {
+              if (prev.some((item) => item.id === incoming.id)) return prev;
+              return sortPostsByNewest([incoming, ...prev]);
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'posts' },
+        (payload) => {
+          const incoming = payload.new as Post;
+          if (!incoming?.id) return;
+
+          setPosts((prev) => {
+            const exists = prev.some((item) => item.id === incoming.id);
+
+            if (incoming.user_id !== resolvedProfileId) {
+              if (!exists) return prev;
+              return prev.filter((item) => item.id !== incoming.id);
+            }
+
+            if (!exists) return sortPostsByNewest([incoming, ...prev]);
+            return sortPostsByNewest(prev.map((item) => (item.id === incoming.id ? { ...item, ...incoming } : item)));
+          });
+
+          setPowrPosts((prev) => {
+            const exists = prev.some((item) => item.id === incoming.id);
+            const hasMedia = getPostMediaItems(incoming).length > 0;
+
+            if (incoming.user_id !== resolvedProfileId || hasMedia) {
+              if (!exists) return prev;
+              return prev.filter((item) => item.id !== incoming.id);
+            }
+
+            if (!exists) return sortPostsByNewest([incoming, ...prev]);
+            return sortPostsByNewest(prev.map((item) => (item.id === incoming.id ? { ...item, ...incoming } : item)));
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'posts' },
+        (payload) => {
+          const removed = payload.old as Pick<Post, 'id'>;
+          if (!removed?.id) return;
+
+          setPosts((prev) => prev.filter((item) => item.id !== removed.id));
+          setPowrPosts((prev) => prev.filter((item) => item.id !== removed.id));
+          setLikedPowrPosts((prev) => prev.filter((item) => item.id !== removed.id));
+          setLiftedPowrPosts((prev) => prev.filter((item) => item.id !== removed.id));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [resolvedProfileId]);
 
   useEffect(() => {
     return () => {
@@ -304,6 +559,8 @@ export default function Page() {
   const getUserProfile = (userId: string) =>
     allProfiles.find((p) => p.id === userId);
 
+  const isProfileVerified = (userProfile?: Profile | null) => Boolean(userProfile?.is_verified ?? userProfile?.verified);
+
   const getPowrPostLikes = (postId: string) =>
     likes.filter((l: any) => l.post_id === postId).length;
 
@@ -319,16 +576,30 @@ export default function Page() {
   const hasPowrLifted = (postId: string) =>
     lifts.some((l: Lift) => l.post_id === postId && l.user_id === currentUser?.id);
 
+  const trendShaperLevel = useMemo(() => {
+    const score = chartImpact.movementsInfluenced + chartImpact.soundsBoosted * 1.5 + chartImpact.soundsEnteredCharts * 2;
+    if (score >= 18) return 'Elite trend shaper';
+    if (score >= 10) return 'Early adopter';
+    if (score >= 4) return 'Emerging trend shaper';
+    return null;
+  }, [chartImpact]);
+
   const parseMediaUrls = (value: unknown): string[] => {
     if (Array.isArray(value)) {
-      return value.filter((item): item is string => typeof item === 'string' && !!item);
+      return value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean);
     }
 
     if (typeof value === 'string') {
       try {
         const parsed = JSON.parse(value);
         if (Array.isArray(parsed)) {
-          return parsed.filter((item): item is string => typeof item === 'string' && !!item);
+          return parsed
+            .filter((item): item is string => typeof item === 'string')
+            .map((item) => item.trim())
+            .filter(Boolean);
         }
       } catch {
         return [];
@@ -341,8 +612,18 @@ export default function Page() {
   const getPostMediaItems = (post: Post): string[] => {
     const multi = parseMediaUrls(post.media_urls);
     if (multi.length > 0) return multi;
-    if (post.media_url) return [post.media_url];
-    return [];
+
+    if (!post.media_url) return [];
+
+    const single = post.media_url.trim();
+    if (!single) return [];
+
+    if (single.startsWith('[')) {
+      const parsedFromSingle = parseMediaUrls(single);
+      if (parsedFromSingle.length > 0) return parsedFromSingle;
+    }
+
+    return [single];
   };
 
   const isVideoUrl = (url: string) => /\.(mp4|webm|ogg)(\?.*)?$/i.test(url);
@@ -510,7 +791,7 @@ export default function Page() {
 
     try {
       const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image();
+        const img = document.createElement('img');
         img.onload = () => resolve(img);
         img.onerror = () => reject(new Error('Failed to load image'));
         img.src = imageUrl;
@@ -772,11 +1053,11 @@ export default function Page() {
   if (!profile) return <div>Loading...</div>;
 
   return (
-    <div className="flex justify-center min-h-screen bg-black">
-      <div className="w-full max-w-[430px] bg-black text-white pb-32">
+    <div className="min-h-screen bg-black">
+      <div className="mx-auto w-full max-w-[900px] bg-black text-white pb-32">
 
         {/* HEADER SECTION */}
-        <div className="px-6 pt-4 pb-8">
+        <div className="px-4 pt-4 pb-8 sm:px-6 lg:px-8">
 
           {/* TOP ACTION BUTTONS */}
           <div className="flex justify-end gap-3 mb-6">
@@ -809,10 +1090,13 @@ export default function Page() {
               >
                 {profile.avatar_url ? (
                   <div className="w-full h-full rounded-full overflow-hidden bg-black relative">
-                    <img
+                    <Image
                       src={localAvatarPreview || profile.avatar_url}
                       alt={`${profile.username} avatar`}
-                      className="w-full h-full object-cover"
+                      fill
+                      unoptimized
+                      sizes="96px"
+                      className="object-cover"
                     />
                     {currentUser?.id === resolvedProfileId && (
                       <div className="absolute inset-0 bg-black/0 hover:bg-black/35 active:bg-black/45 transition-colors" />
@@ -826,10 +1110,13 @@ export default function Page() {
                 ) : (
                   <div className="w-full h-full rounded-full bg-gray-700 relative">
                     {localAvatarPreview && (
-                      <img
+                      <Image
                         src={localAvatarPreview}
                         alt="Avatar preview"
-                        className="w-full h-full object-cover rounded-full"
+                        fill
+                        unoptimized
+                        sizes="96px"
+                        className="object-cover rounded-full"
                       />
                     )}
                     {currentUser?.id === resolvedProfileId && (
@@ -874,11 +1161,15 @@ export default function Page() {
             <div className="flex-1 pt-2">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-lg font-bold">@{profile.username}</span>
-                {profile.verified && <VerificationBadge />}
+                {isProfileVerified(profile) && <VerificationBadge />}
+                {profile.is_creator && <CreatorBadge />}
               </div>
               <div className="text-sm text-gray-400">
                 {profile.bio || 'No bio yet'}
               </div>
+              {profile.is_creator && (
+                <div className="mt-2 text-[11px] text-amber-200/85">This member hosts creator-led sessions.</div>
+              )}
             </div>
           </div>
 
@@ -902,6 +1193,32 @@ export default function Page() {
               <div className="text-3xl font-black">{following.length}</div>
               <div className="text-xs text-gray-500 uppercase tracking-wide mt-1">Following</div>
             </button>
+          </div>
+
+          <div className="mt-6">
+            <div className="text-xs text-gray-500 uppercase tracking-wide">Chart Impact</div>
+            <div className="mt-2 text-sm text-gray-300">{chartImpact.movementsInfluenced} movements influenced</div>
+            <div className="text-sm text-gray-400">{chartImpact.soundsBoosted} sounds boosted</div>
+            <div className="text-sm text-gray-400">{chartImpact.soundsEnteredCharts} sounds entered charts</div>
+            <div className="text-sm text-gray-400">
+              Highest chart position reached: {chartImpact.highestChartPosition ? `#${chartImpact.highestChartPosition}` : '—'}
+            </div>
+            {trendShaperLevel && (
+              <div className="mt-2 inline-flex rounded-full border border-cyan-300/30 bg-cyan-400/10 px-2.5 py-1 text-[11px] text-cyan-200">
+                {trendShaperLevel}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs text-gray-500 uppercase tracking-wide">Chart Influence</div>
+            <div className="mt-1 text-2xl font-black text-white">{influenceScore}</div>
+            <div className="text-xs text-cyan-200">{influenceLabel}</div>
+            {ownsTrendSignal && (
+              <div className="mt-2 inline-flex rounded-full border border-cyan-300/30 bg-cyan-400/10 px-2.5 py-1 text-[11px] text-cyan-200">
+                You are shaping this trend
+              </div>
+            )}
           </div>
 
           {/* CURRENT SOUND CARD */}
@@ -952,7 +1269,7 @@ export default function Page() {
         </div>
 
         {/* MOMENTS HEADER */}
-        <div className="px-6 py-6 flex items-center justify-between border-t border-white/10">
+        <div className="px-4 py-6 flex items-center justify-between border-t border-white/10 sm:px-6 lg:px-8">
           <div className="text-xs font-bold uppercase tracking-widest text-gray-500">Moments</div>
           <button className="text-sm text-green-400 font-semibold hover:text-green-300 active:text-green-500 transition-colors">
             + Add
@@ -960,7 +1277,7 @@ export default function Page() {
         </div>
 
         {/* POSTS / POWR / LIKES / LIFTED TABS */}
-        <div className="px-6 flex gap-5 border-b border-white/10 overflow-x-auto">
+        <div className="px-4 flex gap-5 border-b border-white/10 overflow-x-auto sm:px-6 lg:px-8">
           <button
             onClick={() => setTab('posts')}
             className={`pb-4 text-sm font-semibold transition-colors ${
@@ -997,8 +1314,8 @@ export default function Page() {
 
         {/* POSTS TAB */}
         {tab === 'posts' && (
-          <div className="px-6 pt-4">
-            <div className="grid grid-cols-3 gap-1">
+          <div className="px-4 pt-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-3 gap-1 md:grid-cols-4 lg:grid-cols-5">
               {mediaPosts.map(post => (
                 <button
                   key={post.id}
@@ -1006,7 +1323,7 @@ export default function Page() {
                     setActivePost(post);
                     setActiveMediaIndex(0);
                   }}
-                  className="relative group cursor-pointer overflow-hidden rounded-lg active:opacity-75 transition-opacity"
+                  className="relative aspect-square group cursor-pointer overflow-hidden rounded-lg active:opacity-75 transition-opacity"
                 >
                   {post.isVideo ? (
                     <video
@@ -1026,10 +1343,13 @@ export default function Page() {
                       loop
                     />
                   ) : (
-                    <img
+                    <Image
                       src={post.mediaItems[0]}
                       alt="Grid post media"
-                      className="aspect-square object-cover"
+                      fill
+                      unoptimized
+                      sizes="(max-width: 1024px) 33vw, 20vw"
+                      className="object-cover"
                     />
                   )}
                   {post.mediaItems.length > 1 && (
@@ -1114,9 +1434,12 @@ export default function Page() {
                 <div key={p.id} className="bg-white/5 border border-white/10 rounded-2xl p-5 backdrop-blur space-y-4">
                   <div className="flex items-start gap-3">
                     {author?.avatar_url ? (
-                      <img
+                      <Image
                         src={author.avatar_url}
                         alt={author.username}
+                        width={40}
+                        height={40}
+                        unoptimized
                         className="w-10 h-10 rounded-full flex-shrink-0"
                       />
                     ) : (
@@ -1125,7 +1448,7 @@ export default function Page() {
                     <div className="flex-1">
                       <div className="font-semibold text-white flex items-center gap-1">
                         {author?.username || (p.user_id === currentUser?.id ? 'You' : 'User')}
-                        {author?.verified && <VerificationBadge />}
+                        {isProfileVerified(author) && <VerificationBadge />}
                       </div>
                       <div className="text-xs text-gray-500">
                         {p.created_at ? new Date(p.created_at).toLocaleDateString() : ''}
@@ -1173,7 +1496,7 @@ export default function Page() {
                               <div className="flex items-center gap-1 mb-1">
                                 <b className="text-sm font-semibold text-white flex items-center gap-1">
                                   {commentAuthor?.username || (c.user_id === currentUser?.id ? 'You' : 'User')}
-                                  {commentAuthor?.verified && <VerificationBadge />}
+                                  {isProfileVerified(commentAuthor) && <VerificationBadge />}
                                 </b>
                               </div>
                               <p className="text-sm text-gray-300">{c.content}</p>
@@ -1224,7 +1547,7 @@ export default function Page() {
                 <div key={post.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                   <div className="text-sm font-semibold text-white flex items-center gap-1">
                     {author?.username || 'User'}
-                    {author?.verified && <VerificationBadge />}
+                    {isProfileVerified(author) && <VerificationBadge />}
                   </div>
                   <p className="mt-2 text-sm text-gray-200 leading-relaxed">{post.content}</p>
                   <div className="mt-3 text-xs text-gray-400">
@@ -1251,7 +1574,7 @@ export default function Page() {
                   <div className="text-[11px] uppercase tracking-wider text-cyan-300 mb-2">Lifted</div>
                   <div className="text-sm font-semibold text-white flex items-center gap-1">
                     {author?.username || 'User'}
-                    {author?.verified && <VerificationBadge />}
+                    {isProfileVerified(author) && <VerificationBadge />}
                   </div>
                   <p className="mt-2 text-sm text-gray-200 leading-relaxed">{post.content}</p>
                   <div className="mt-3 text-xs text-gray-400">
@@ -1269,10 +1592,13 @@ export default function Page() {
             <div className="w-full max-w-[380px] bg-[#101010] border border-white/10 rounded-2xl p-4">
               <div className="text-sm font-semibold text-white mb-3">Adjust Profile Photo</div>
               <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-black mb-3">
-                <img
+                <Image
                   src={avatarCropSource}
                   alt="Avatar crop preview"
-                  className="w-full h-full object-cover"
+                  fill
+                  unoptimized
+                  sizes="380px"
+                  className="object-cover"
                   style={{ transform: `scale(${avatarZoom})` }}
                 />
               </div>
@@ -1342,7 +1668,7 @@ export default function Page() {
                       >
                         {activePostMedia.map((url) => (
                           <div key={url} className="w-full shrink-0 snap-center">
-                            <img src={url} alt="Post media" className="w-full max-h-[60vh] object-contain" />
+                            <Image src={url} alt="Post media" width={1200} height={1200} unoptimized className="w-full max-h-[60vh] object-contain" />
                           </div>
                         ))}
                       </div>
@@ -1356,7 +1682,7 @@ export default function Page() {
                           playsInline
                         />
                       ) : (
-                        <img src={activePostMedia[0]} alt="Post media" className="w-full max-h-[60vh] object-contain" />
+                        <Image src={activePostMedia[0]} alt="Post media" width={1200} height={1200} unoptimized className="w-full max-h-[60vh] object-contain" />
                       )
                     ) : null}
 

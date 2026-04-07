@@ -8,8 +8,8 @@ export default function VerificationBadge() {
       aria-label="Verified"
     >
       <title>Verified</title>
-      <circle cx="8" cy="8" r="7" fill="#0095F6" />
-      <path d="M4.9 8.1 6.8 10l4.3-4.5" stroke="white" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="8" cy="8" r="7" fill="#D1D5DB" fillOpacity="0.35" />
+      <path d="M4.9 8.1 6.8 10l4.3-4.5" stroke="#F9FAFB" strokeOpacity="0.9" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

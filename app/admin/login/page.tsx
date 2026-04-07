@@ -10,7 +10,9 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -22,14 +24,14 @@ export default function AdminLoginPage() {
       if (!active || !user) return;
 
       const { data: profile } = await supabase
-        .from('profiles')
-        .select('is_admin')
+        .from('admin_users')
+        .select('id')
         .eq('id', user.id)
         .maybeSingle();
 
       if (!active) return;
 
-      if (profile?.is_admin) {
+      if (profile?.id) {
         router.replace('/admin');
       }
     };
@@ -43,6 +45,7 @@ export default function AdminLoginPage() {
 
   const handleAdminLogin = async () => {
     setError(null);
+    setMessage(null);
 
     if (!email.trim() || !password) {
       setError('Enter admin email and password.');
@@ -69,16 +72,16 @@ export default function AdminLoginPage() {
       }
 
       const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('is_admin')
+        .from('admin_users')
+        .select('id')
         .eq('id', signedInUser.id)
-        .single();
+        .maybeSingle();
 
       if (profileError) {
         throw profileError;
       }
 
-      if (!profile?.is_admin) {
+      if (!profile?.id) {
         await supabase.auth.signOut();
         setError('This account does not have admin access.');
         return;
@@ -93,6 +96,44 @@ export default function AdminLoginPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSendOtp = async () => {
+    setError(null);
+    setMessage(null);
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setError('Enter your admin email first.');
+      return;
+    }
+
+    setOtpSending(true);
+
+    try {
+      // Prevent user-session carryover when initiating admin verification flow.
+      await supabase.auth.signOut();
+
+      const response = await fetch('/api/auth/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalizedEmail }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error || 'Unable to send OTP.');
+      }
+
+      setMessage('OTP sent. Check your inbox and verify to continue admin login.');
+      router.push(
+        `/verify-account?email=${encodeURIComponent(normalizedEmail)}&from=admin&next=${encodeURIComponent('/admin/login')}`,
+      );
+    } catch (otpError: unknown) {
+      setError(otpError instanceof Error ? otpError.message : 'Unable to send OTP.');
+    } finally {
+      setOtpSending(false);
     }
   };
 
@@ -135,6 +176,15 @@ export default function AdminLoginPage() {
 
           <button
             type="button"
+            onClick={handleSendOtp}
+            disabled={otpSending}
+            className="w-full rounded-xl border border-white/15 bg-white/10 py-2 text-sm disabled:opacity-60"
+          >
+            {otpSending ? 'Sending OTP...' : 'Send OTP'}
+          </button>
+
+          <button
+            type="button"
             onClick={() => router.push('/login')}
             className="w-full rounded-xl bg-white/10 border border-white/15 py-2 text-sm"
           >
@@ -144,6 +194,12 @@ export default function AdminLoginPage() {
           {error && (
             <div className="rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs p-2">
               {error}
+            </div>
+          )}
+
+          {message && (
+            <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs p-2">
+              {message}
             </div>
           )}
         </div>

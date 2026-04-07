@@ -52,7 +52,7 @@ export default function LoginPage() {
 
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('two_factor_enabled, is_verified')
+      .select('two_factor_enabled, is_verified, username')
       .eq('id', signedInUser.id)
       .single();
 
@@ -99,8 +99,14 @@ export default function LoginPage() {
       return;
     }
 
+    const username = (profileData?.username || '').trim().toLowerCase();
+    if (!username) {
+      router.replace('/onboarding/username');
+      return;
+    }
+
     setMessage('Signed in successfully.');
-    router.replace('/');
+    router.replace(`/${username}`);
   };
 
   const handleSignIn = async () => {

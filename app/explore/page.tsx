@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/immutability */
 /* eslint-disable react-hooks/purity */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import VerificationBadge from '@/components/VerificationBadge';
@@ -12,6 +12,8 @@ type Post = {
   id: string;
   content: string;
   user_id: string;
+  genre?: string | null;
+  hashtags?: string[] | null;
   media_url?: string | null;
   created_at?: string;
   hidden_by_admin?: boolean;
@@ -42,11 +44,22 @@ type Follow = {
   following_id: string;
 };
 
+type Sound = {
+  id: string;
+  track_name?: string | null;
+  artist_name?: string | null;
+  cover_url?: string | null;
+  category?: string | null;
+};
+
 export default function ExplorePage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [likes, setLikes] = useState<Like[]>([]);
+  const [sounds, setSounds] = useState<Sound[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [genreOptions, setGenreOptions] = useState<string[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [suggestedUsers, setSuggestedUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,6 +82,15 @@ export default function ExplorePage() {
     const { data: commentsData } = await supabase.from('comments').select('*');
     const { data: likesData } = await supabase.from('likes').select('*');
     const { data: followsData } = await supabase.from('follows').select('*');
+    const { data: soundsData } = await supabase
+      .from('sounds')
+      .select('id, track_name, artist_name, cover_url, category')
+      .order('usage_count', { ascending: false })
+      .limit(300);
+    const { data: adminGenresData } = await supabase
+      .from('admin_genres')
+      .select('name')
+      .limit(100);
 
     const visibleProfiles = ((profilesData || []) as Profile[]).filter((item) => !item.shadow_banned);
     const visibleProfileIds = new Set(visibleProfiles.map((item) => item.id));
@@ -80,6 +102,8 @@ export default function ExplorePage() {
     setProfiles(visibleProfiles);
     setComments(commentsData || []);
     setLikes(likesData || []);
+    setSounds((soundsData as Sound[]) || []);
+    setGenreOptions((((adminGenresData || []) as { name?: string | null }[]).map((item) => item.name || '').filter(Boolean)) as string[]);
     if (user?.id && profilesData && followsData) {
       generateSuggestions(profilesData, followsData, user.id);
     }
@@ -118,6 +142,63 @@ export default function ExplorePage() {
       ? [...filteredPosts].sort((a, b) => getPostScore(b) - getPostScore(a))
       : [...posts].sort((a, b) => getPostScore(b) - getPostScore(a));
 
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+
+  const userResults = useMemo(() => {
+    if (!normalizedQuery) return [];
+
+    return profiles
+      .filter((item) => item.id !== currentUser?.id)
+      .filter((item) => item.username?.toLowerCase().includes(normalizedQuery))
+      .slice(0, 8);
+  }, [profiles, currentUser, normalizedQuery]);
+
+  const musicResults = useMemo(() => {
+    if (!normalizedQuery) return [];
+
+    return sounds
+      .filter((item) => {
+        const track = item.track_name?.toLowerCase() || '';
+        const artist = item.artist_name?.toLowerCase() || '';
+        return track.includes(normalizedQuery) || artist.includes(normalizedQuery);
+      })
+      .slice(0, 8);
+  }, [sounds, normalizedQuery]);
+
+  const genreResults = useMemo(() => {
+    if (!normalizedQuery) return [];
+
+    const fromPosts = posts.map((item) => item.genre || '').filter(Boolean);
+    const fromSounds = sounds.map((item) => item.category || '').filter(Boolean);
+    const merged = [...genreOptions, ...fromPosts, ...fromSounds];
+    const unique = Array.from(new Set(merged.map((item) => item.trim()).filter(Boolean)));
+
+    return unique.filter((item) => item.toLowerCase().includes(normalizedQuery)).slice(0, 10);
+  }, [posts, sounds, genreOptions, normalizedQuery]);
+
+  const hashtagResults = useMemo(() => {
+    if (!normalizedQuery) return [];
+
+    const counts = new Map<string, number>();
+
+    for (const post of posts) {
+      const inlineTags = (post.content || '').match(/#[a-zA-Z0-9_]+/g) || [];
+      const listTags = (post.hashtags || []).map((item) => `#${String(item).replace(/^#/, '')}`);
+      const tags = [...inlineTags, ...listTags];
+
+      for (const tag of tags) {
+        const normalizedTag = tag.toLowerCase();
+        counts.set(normalizedTag, (counts.get(normalizedTag) || 0) + 1);
+      }
+    }
+
+    return Array.from(counts.entries())
+      .filter(([tag]) => tag.includes(normalizedQuery.startsWith('#') ? normalizedQuery : `#${normalizedQuery}`) || tag.includes(normalizedQuery))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([tag, count]) => ({ tag, count }));
+  }, [posts, normalizedQuery]);
+
   const generateSuggestions = (
     profilesList: Profile[],
     followsList: Follow[],
@@ -149,6 +230,14 @@ export default function ExplorePage() {
           <div className="px-6 py-4">
             <h1 className="text-3xl font-black">Explore</h1>
             <p className="text-sm text-gray-500 mt-1">Discover people and posts</p>
+            <div className="mt-3">
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search users, music, genres, hashtags"
+                className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-gray-500"
+              />
+            </div>
           </div>
         </div>
 
@@ -158,6 +247,92 @@ export default function ExplorePage() {
 
           {!loading && (
             <>
+              {normalizedQuery && (
+                <div className="space-y-5">
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2 px-1">Users</h2>
+                    {userResults.length === 0 && <p className="text-sm text-gray-600 px-1">No users found</p>}
+                    <div className="space-y-2">
+                      {userResults.map((item) => (
+                        <button
+                          key={item.id}
+                          className="w-full flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors"
+                          onClick={() => router.push(`/profile/${item.id}`)}
+                        >
+                          {item.avatar_url ? (
+                            <img src={item.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-white/10" />
+                          )}
+                          <div className="text-left">
+                            <div className="text-sm font-semibold text-white inline-flex items-center gap-1">
+                              {item.username}
+                              {item.verified && <VerificationBadge />}
+                            </div>
+                            <div className="text-xs text-gray-500">@{item.username?.toLowerCase()}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2 px-1">Music</h2>
+                    {musicResults.length === 0 && <p className="text-sm text-gray-600 px-1">No music found</p>}
+                    <div className="space-y-2">
+                      {musicResults.map((item) => (
+                        <button
+                          key={item.id}
+                          className="w-full flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors"
+                          onClick={() => router.push(`/sound/${item.id}`)}
+                        >
+                          {item.cover_url && <img src={item.cover_url} alt="" className="w-10 h-10 rounded-md object-cover" />}
+                          <div className="text-left min-w-0">
+                            <div className="truncate text-sm font-semibold text-white">{item.track_name || ''}</div>
+                            <div className="truncate text-xs text-gray-500">{item.artist_name || ''}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2 px-1">Genres</h2>
+                    {genreResults.length === 0 && <p className="text-sm text-gray-600 px-1">No genres found</p>}
+                    <div className="flex flex-wrap gap-2">
+                      {genreResults.map((genre) => (
+                        <button
+                          key={genre}
+                          onClick={() => setSearchQuery(genre)}
+                          className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/85"
+                        >
+                          {genre}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2 px-1">Hashtags</h2>
+                    {hashtagResults.length === 0 && <p className="text-sm text-gray-600 px-1">No hashtags found</p>}
+                    <div className="space-y-1">
+                      {hashtagResults.map((item) => (
+                        <button
+                          key={item.tag}
+                          onClick={() => setSearchQuery(item.tag)}
+                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-left text-sm text-white/85"
+                        >
+                          <span>{item.tag}</span>
+                          <span className="ml-2 text-xs text-gray-500">{item.count}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!normalizedQuery && (
+                <>
               {/* PEOPLE */}
               <div>
                 <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-3 px-1">Suggested</h2>
@@ -226,6 +401,8 @@ export default function ExplorePage() {
                   })}
                 </div>
               </div>
+                </>
+              )}
             </>
           )}
 

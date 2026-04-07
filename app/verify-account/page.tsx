@@ -27,6 +27,8 @@ function maskVerificationTarget(value: string, method: PendingVerification['meth
 export default function VerifyAccountPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const nextPath = searchParams.get('next');
+  const fromAdmin = searchParams.get('from') === 'admin';
 
   const [pending, setPending] = useState<PendingVerification | null>(null);
   const [code, setCode] = useState('');
@@ -48,9 +50,20 @@ export default function VerifyAccountPage() {
 
       const methodParam = searchParams.get('method');
       const valueParam = searchParams.get('value');
+      const emailParam = searchParams.get('email');
 
       if ((methodParam === 'email' || methodParam === 'phone') && valueParam) {
         const nextPending = { method: methodParam, value: valueParam } as PendingVerification;
+        savePendingVerification(nextPending);
+        if (active) {
+          setPending(nextPending);
+          setCooldown(getVerificationCooldownSeconds());
+        }
+        return;
+      }
+
+      if (emailParam) {
+        const nextPending = { method: 'email', value: emailParam } as PendingVerification;
         savePendingVerification(nextPending);
         if (active) {
           setPending(nextPending);
@@ -161,6 +174,11 @@ export default function VerifyAccountPage() {
       }
       clearPendingVerification();
       setMessage('Account verified successfully.');
+
+      if (fromAdmin) {
+        router.replace(nextPath && nextPath.startsWith('/') ? nextPath : '/admin/login');
+        return;
+      }
 
       const { data: sessionData } = await supabase.auth.getSession();
       router.replace(sessionData.session ? '/' : '/login');

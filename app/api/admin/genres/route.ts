@@ -26,18 +26,19 @@ export async function POST(request: Request) {
   const name = body?.name?.trim();
   if (!name) return jsonError('name is required', 400);
 
-  const { data, error } = await auth.admin
-    .from('admin_genres')
-    .insert({
-      name,
-      priority_weight: Number.isFinite(body?.priority_weight) ? Number(body?.priority_weight) : 100,
-      is_active: true,
-    })
-    .select('id, name, priority_weight, is_active, created_at, updated_at')
-    .single();
+  const notes = `Add genre requested with priority_weight=${Number.isFinite(body?.priority_weight) ? Number(body?.priority_weight) : 100}`;
+  const { error } = await auth.admin.from('admin_requests').insert({
+    admin_id: auth.user.id,
+    submitted_by: auth.user.id,
+    subject: 'ADD_GENRE',
+    target_id: name,
+    target: name,
+    notes,
+    status: 'pending',
+  });
 
   if (error) return jsonError(error.message, 400);
-  return jsonOk({ item: data }, 201);
+  return jsonOk({ success: true, message: 'Request submitted for approval' }, 201);
 }
 
 export async function PATCH(request: Request) {
@@ -54,15 +55,27 @@ export async function PATCH(request: Request) {
   const id = body?.id?.trim();
   if (!id) return jsonError('id is required', 400);
 
-  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  if (typeof body?.name === 'string' && body.name.trim()) patch.name = body.name.trim();
-  if (body?.priority_weight !== undefined) patch.priority_weight = Number(body.priority_weight);
-  if (typeof body?.is_active === 'boolean') patch.is_active = body.is_active;
+  const nextName = typeof body?.name === 'string' && body.name.trim() ? body.name.trim() : id;
+  const notes = [
+    'Modify genre requested',
+    body?.priority_weight !== undefined ? `priority_weight=${Number(body.priority_weight)}` : null,
+    typeof body?.is_active === 'boolean' ? `is_active=${body.is_active}` : null,
+  ]
+    .filter(Boolean)
+    .join(' | ');
 
-  const { error } = await auth.admin.from('admin_genres').update(patch).eq('id', id);
+  const { error } = await auth.admin.from('admin_requests').insert({
+    admin_id: auth.user.id,
+    submitted_by: auth.user.id,
+    subject: 'MODIFY_GENRE',
+    target_id: nextName,
+    target: nextName,
+    notes,
+    status: 'pending',
+  });
   if (error) return jsonError(error.message, 400);
 
-  return jsonOk({ success: true });
+  return jsonOk({ success: true, message: 'Request submitted for approval' });
 }
 
 export async function DELETE(request: Request) {
@@ -73,8 +86,16 @@ export async function DELETE(request: Request) {
   const id = url.searchParams.get('id')?.trim();
   if (!id) return jsonError('id is required', 400);
 
-  const { error } = await auth.admin.from('admin_genres').delete().eq('id', id);
+  const { error } = await auth.admin.from('admin_requests').insert({
+    admin_id: auth.user.id,
+    submitted_by: auth.user.id,
+    subject: 'REMOVE_GENRE',
+    target_id: id,
+    target: id,
+    notes: 'Remove genre requested',
+    status: 'pending',
+  });
   if (error) return jsonError(error.message, 400);
 
-  return jsonOk({ success: true });
+  return jsonOk({ success: true, message: 'Request submitted for approval' });
 }

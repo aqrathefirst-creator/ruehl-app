@@ -43,22 +43,21 @@ export async function POST(request: Request) {
   if (!userId) return jsonError('user_id is required', 400);
   if (status !== 'approved' && status !== 'rejected') return jsonError('Invalid status', 400);
 
-  const { error: requestError } = await auth.admin
-    .from('verification_requests')
-    .update({ status })
-    .eq('id', requestId);
+  const notes = `Verification decision requested from moderation queue ${requestId}. Proposed status: ${status}.`;
 
-  if (requestError) return jsonError(requestError.message, 400);
+  const { error: insertError } = await auth.admin
+    .from('admin_requests')
+    .insert({
+      admin_id: auth.user.id,
+      submitted_by: auth.user.id,
+      subject: 'VERIFY_USER',
+      target_id: userId,
+      target: userId,
+      notes,
+      status: 'pending',
+    });
 
-  const { error: profileError } = await auth.admin
-    .from('profiles')
-    .update({
-      is_verified: status === 'approved',
-      verified: status === 'approved',
-    })
-    .eq('id', userId);
+  if (insertError) return jsonError(insertError.message, 400);
 
-  if (profileError) return jsonError(profileError.message, 400);
-
-  return jsonOk({ success: true });
+  return jsonOk({ success: true, message: 'Request submitted for approval' });
 }

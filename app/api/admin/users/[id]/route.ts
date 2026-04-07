@@ -3,6 +3,28 @@ import { jsonError, jsonOk } from '@/lib/server/responses';
 
 type AdminAction = 'verify' | 'shadow_ban' | 'suspend' | 'reset_password' | 'delete_user' | 'add_note';
 
+async function submitGovernanceRequest(params: {
+  auth: Awaited<ReturnType<typeof requireAdmin>> & { ok: true };
+  subject: string;
+  targetId: string;
+  notes: string;
+}) {
+  const { auth, subject, targetId, notes } = params;
+  const { error } = await auth.admin.from('admin_requests').insert({
+    admin_id: auth.user.id,
+    submitted_by: auth.user.id,
+    subject,
+    target_id: targetId,
+    target: targetId,
+    notes,
+    status: 'pending',
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Unable to submit request');
+  }
+}
+
 type ErrorLike = {
   code?: string;
   message?: string;
@@ -99,49 +121,46 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (action === 'verify') {
     const next = body?.value === true;
-    const { error } = await auth.admin
-      .from('profiles')
-      .update({ is_verified: next, verified: next })
-      .eq('id', userId);
-
-    if (error) return jsonError(error.message, 400);
-    return jsonOk({ success: true });
+    await submitGovernanceRequest({
+      auth,
+      subject: 'VERIFY_USER',
+      targetId: userId,
+      notes: `Requested verification change to ${next ? 'verified' : 'unverified'}.`,
+    });
+    return jsonOk({ success: true, message: 'Request submitted for approval' });
   }
 
   if (action === 'shadow_ban') {
     const next = body?.value === true;
-    const { error } = await auth.admin.from('profiles').update({ shadow_banned: next }).eq('id', userId);
-    if (error) return jsonError(error.message, 400);
-    return jsonOk({ success: true });
+    await submitGovernanceRequest({
+      auth,
+      subject: 'SHADOW_BAN_USER',
+      targetId: userId,
+      notes: `Requested shadow ban change to ${next ? 'enabled' : 'disabled'}.`,
+    });
+    return jsonOk({ success: true, message: 'Request submitted for approval' });
   }
 
   if (action === 'suspend') {
     const days = Math.max(0, Number(body?.days || 0));
-    const suspendedUntil = days > 0 ? new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString() : null;
-    const { error } = await auth.admin.from('profiles').update({ suspended_until: suspendedUntil }).eq('id', userId);
-    if (error) return jsonError(error.message, 400);
-    return jsonOk({ success: true, suspended_until: suspendedUntil });
+    await submitGovernanceRequest({
+      auth,
+      subject: 'RESTRICT_USER',
+      targetId: userId,
+      notes: `Requested restriction for ${days} day(s).`,
+    });
+    return jsonOk({ success: true, message: 'Request submitted for approval' });
   }
 
   if (action === 'reset_password') {
-    const userResult = await auth.admin.auth.admin.getUserById(userId);
-    if (userResult.error) return jsonError(userResult.error.message, 400);
-
-    const email = userResult.data.user?.email?.trim().toLowerCase();
-    const overrideEmail = body?.reset_email?.trim().toLowerCase();
-    const targetEmail = overrideEmail || email;
-
-    if (!targetEmail) return jsonError('Target user has no email for password reset', 400);
-    if (!targetEmail.includes('@')) return jsonError('Invalid reset email', 400);
-
-    const appBaseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
-    const { error: resetError } = await auth.admin.auth.resetPasswordForEmail(targetEmail, {
-      redirectTo: `${appBaseUrl}/reset-password`,
+    const email = body?.reset_email?.trim().toLowerCase() || 'account-email-on-file';
+    await submitGovernanceRequest({
+      auth,
+      subject: 'SECURITY_CHANGE',
+      targetId: userId,
+      notes: `Requested password reset/security update for ${email}.`,
     });
-
-    if (resetError) return jsonError(resetError.message, 400);
-
-    return jsonOk({ success: true, email: targetEmail });
+    return jsonOk({ success: true, message: 'Request submitted for approval' });
   }
 
   if (action === 'add_note') {
@@ -162,13 +181,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (userId === auth.user.id) return jsonError('You cannot delete yourself', 400);
     if (body?.confirm !== 'DELETE') return jsonError('Explicit DELETE confirmation is required', 400);
 
-    const cleanup = await auth.supabase.rpc('admin_delete_user', { target_user_id: userId });
-    if (cleanup.error) return jsonError(cleanup.error.message, 400);
+    await submitGovernanceRequest({
+      auth,
+      subject: 'DELETE_USER',
+      targetId: userId,
+      notes: 'Requested account deletion from user detail panel.',
+    });
 
-    const deleteResult = await auth.admin.auth.admin.deleteUser(userId);
-    if (deleteResult.error) return jsonError(deleteResult.error.message, 400);
-
-    return jsonOk({ success: true });
+    return jsonOk({ success: true, message: 'Request submitted for approval' });
   }
 
   return jsonError('Unsupported action', 400);

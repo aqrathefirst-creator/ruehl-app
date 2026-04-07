@@ -5,11 +5,12 @@ import { supabase } from '../../lib/supabase'
 
 type RequestRow = {
   id: string
+  session_id?: string | null
   requester_id?: string | null
   sender_id?: string | null
   target_id?: string | null
   receiver_id?: string | null
-  status: 'pending' | 'accepted' | 'declined'
+  status: 'pending' | 'accepted' | 'declined' | 'PENDING' | 'ACCEPTED' | 'DECLINED'
 }
 
 type Profile = {
@@ -41,7 +42,12 @@ export default function RequestsPage() {
       .or(`target_id.eq.${data.user.id},receiver_id.eq.${data.user.id}`)
       .order('created_at', { ascending: false })
 
-    setRequests(req || [])
+    setRequests(
+      ((req || []) as RequestRow[]).map((row) => ({
+        ...row,
+        status: (row.status || 'pending').toLowerCase() as RequestRow['status'],
+      }))
+    )
 
     const { data: prof } = await supabase
       .from('profiles')
@@ -67,7 +73,7 @@ export default function RequestsPage() {
 
       await supabase
         .from('training_requests')
-        .update({ status: 'accepted' })
+        .update({ status: 'ACCEPTED' })
         .eq('id', req.id)
 
       // check if match already exists (avoid duplicates)
@@ -82,6 +88,7 @@ export default function RequestsPage() {
       if (!existing) {
         // create match
         await supabase.from('training_matches').insert({
+          session_id: req.session_id || null,
           user_a: requesterId,
           user_b: targetId,
         })
@@ -89,7 +96,7 @@ export default function RequestsPage() {
     } else {
       await supabase
         .from('training_requests')
-        .update({ status: 'declined' })
+        .update({ status: 'DECLINED' })
         .eq('id', req.id)
     }
 
