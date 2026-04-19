@@ -1,0 +1,68 @@
+/**
+ * Ruehl design tokens — locked per WEB_DIRECTION.md §3.
+ */
+:root {
+  --bg-primary: #000000;
+  --bg-secondary: #0d0d0d;
+  --bg-tertiary: #111111;
+  --bg-elevated: #1a1a1a;
+
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-muted: rgba(255, 255, 255, 0.4);
+  --text-meta: rgba(255, 255, 255, 0.36);
+  --text-caption: rgba(255, 255, 255, 0.3);
+
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.19);
+
+  --accent-violet: #7c3aed;
+  --accent-violet-bright: #a855f7;
+  --accent-lift: #8b5cf6;
+  --accent-spotify: #1ed760;
+  --accent-verify: #4fc3f7;
+
+  --semantic-error: #ef4444;
+  --semantic-warning-text: #ff8f8f;
+
+  --creator-signal-bg: rgba(138, 43, 226, 0.06);
+  --creator-signal-border: rgba(138, 43, 226, 0.2);
+  --creator-signal-chip-bg: rgba(138, 43, 226, 0.2);
+
+  --avatar-ring: rgba(255, 255, 255, 0.16);
+
+  --gradient-identity-footer: linear-gradient(to bottom, transparent, #060606);
+
+  --font-size-title: 18px;
+  --font-size-username: 14px;
+  --font-size-caption: 13px;
+  --font-size-meta: 11px;
+  --font-size-identity-username: 26px;
+  --font-size-profile-username: 34px;
+  --font-size-stats-value: 22px;
+  --font-size-stats-label: 9px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-page: 16px;
+  --space-5: 24px;
+
+  --discovery-margin-y: 6px;
+  --discovery-pad-x: 12px;
+  --discovery-pad-y: 4px;
+  --discovery-gap: 12px;
+  --discovery-tile-width: 152px;
+
+  --radius-pill: 999px;
+  --radius-card: 22px;
+  --radius-media: 8px;
+  --radius-skeleton-sm: 5px;
+  --radius-skeleton-md: 7px;
+  --radius-avatar-outer: 45px;
+  --radius-avatar-inner: 42px;
+
+  --shell-nav-expanded: 240px;
+  --shell-nav-collapsed: 72px;
+  --shell-right-rail: 340px;
+}

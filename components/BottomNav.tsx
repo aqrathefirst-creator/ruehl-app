@@ -134,26 +134,26 @@ export default function BottomNav() {
             if (uploadSnapshot.error) clearCreateUploadState();
             else router.push('/now');
           }}
-          className="fixed bottom-24 left-1/2 -translate-x-1/2 w-[92%] max-w-[430px] z-50 rounded-2xl border border-white/10 bg-black/85 px-4 py-3 text-left shadow-2xl backdrop-blur-md md:hidden"
+          className="fixed bottom-24 left-1/2 z-50 w-[92%] max-w-[430px] -translate-x-1/2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)] px-4 py-3 text-left shadow-2xl backdrop-blur-md md:hidden"
         >
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-white">
+              <div className="text-sm font-semibold text-[var(--text-primary)]">
                 {uploadSnapshot.error ? 'Post upload failed' : 'Publishing post'}
               </div>
-              <div className="text-xs text-white/70">
+              <div className="text-xs text-[var(--text-muted)]">
                 {uploadSnapshot.error || uploadSnapshot.status}
               </div>
             </div>
-            <div className="text-xs text-white/80">
+            <div className="text-xs text-[var(--text-muted)]">
               {uploadSnapshot.error ? 'Dismiss' : `${Math.round(uploadSnapshot.progress)}%`}
             </div>
           </div>
 
           {!uploadSnapshot.error && (
-            <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--border-subtle)]">
               <div
-                className="h-full bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400 transition-all duration-300"
+                className="h-full bg-[var(--accent-violet)] transition-all duration-300"
                 style={{ width: `${Math.max(6, uploadSnapshot.progress)}%` }}
               />
             </div>
@@ -161,7 +161,9 @@ export default function BottomNav() {
         </button>
       )}
 
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-[430px] backdrop-blur-md bg-black/85 border border-white/[0.08] shadow-2xl rounded-2xl z-50 flex items-center justify-between px-6 md:hidden" style={{ height: 72 }}>
+      <div
+        className="fixed bottom-4 left-1/2 z-50 flex h-[72px] w-[92%] max-w-[430px] -translate-x-1/2 items-center justify-between rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)] px-6 shadow-2xl backdrop-blur-md md:hidden"
+      >
 
       {/* LEFT SIDE */}
       <div className="flex items-center gap-8">
@@ -177,20 +179,20 @@ export default function BottomNav() {
             >
               <Icon
                 size={24}
-                className={active ? 'text-white' : 'text-white/40'}
+                className={active ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'}
                 strokeWidth={active ? 2.5 : 1.8}
               />
 
               <span
                 className={`text-[11px] ${
-                  active ? 'text-white font-semibold' : 'text-white/40'
+                  active ? 'font-semibold text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'
                 }`}
               >
                 {tab.name}
               </span>
 
               {active && (
-                <div className="absolute -bottom-1 w-1 h-1 bg-white rounded-full" />
+                <div className="absolute -bottom-1 h-1 w-1 rounded-full bg-[var(--accent-violet-bright)]" />
               )}
             </button>
           );
@@ -209,9 +211,9 @@ export default function BottomNav() {
         onFocus={() => {
           void prewarmCameraStream('user');
         }}
-        className="relative -mt-8 w-14 h-14 rounded-full bg-gradient-to-r from-green-400 to-purple-500 flex items-center justify-center shadow-lg active:scale-90 transition"
+        className="relative -mt-8 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-violet)] shadow-lg transition active:scale-90"
       >
-        <Plus size={26} className="text-black" />
+        <Plus size={26} className="text-[var(--text-primary)]" />
       </button>
 
       {/* RIGHT SIDE */}
@@ -228,20 +230,20 @@ export default function BottomNav() {
             >
               <Icon
                 size={24}
-                className={active ? 'text-white' : 'text-white/40'}
+                className={active ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'}
                 strokeWidth={active ? 2.5 : 1.8}
               />
 
               <span
                 className={`text-[11px] ${
-                  active ? 'text-white font-semibold' : 'text-white/40'
+                  active ? 'font-semibold text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'
                 }`}
               >
                 {tab.name}
               </span>
 
               {active && (
-                <div className="absolute -bottom-1 w-1 h-1 bg-white rounded-full" />
+                <div className="absolute -bottom-1 h-1 w-1 rounded-full bg-[var(--accent-violet-bright)]" />
               )}
             </button>
           );
@@ -254,8 +256,8 @@ export default function BottomNav() {
           className="flex flex-col items-center gap-1 relative transition active:scale-90"
         >
           <div
-            className={`w-7 h-7 rounded-full overflow-hidden flex items-center justify-center text-xs font-bold text-white ${
-              isProfileActive ? 'ring-2 ring-white' : ''
+            className={`flex h-7 w-7 items-center justify-center overflow-hidden rounded-full text-xs font-bold text-[var(--text-primary)] ${
+              isProfileActive ? 'ring-2 ring-[var(--accent-violet-bright)]' : ''
             }`}
           >
             {avatar ? (
@@ -267,7 +269,7 @@ export default function BottomNav() {
 
           <span
             className={`text-[11px] ${
-              isProfileActive ? 'text-white font-semibold' : 'text-white/40'
+              isProfileActive ? 'font-semibold text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'
             }`}
           >
             You
