@@ -802,7 +802,7 @@ export default function NowFeedPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="mx-auto w-full max-w-[980px] px-4 pb-24 pt-6 space-y-6">
+      <div className="mx-auto w-full max-w-[600px] px-4 pb-24 pt-6 space-y-6">
         <header className="mb-2">
           <h1 className="text-3xl font-black tracking-tight">Now</h1>
           <p className="mt-1 text-sm text-gray-500">Live feed of video, image, and POWR posts</p>

@@ -278,7 +278,7 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="w-full max-w-[430px] mx-auto px-4 pb-28 pt-6 space-y-8">
+      <div className="mx-auto w-full max-w-[720px] px-4 pb-28 pt-6 space-y-8">
         <div>
           <h1 className="text-3xl font-black">Settings</h1>
           <p className="text-sm text-gray-500 mt-1">Control your account, privacy, and security.</p>

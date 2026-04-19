@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import './globals.css';
-import DesktopSidebar from '@/components/DesktopSidebar';
-import DesktopRightPanel from '@/components/DesktopRightPanel';
+import AppShell from '@/components/shell/AppShell';
 import { supabase } from '@/lib/supabase';
 import { hasActiveCreateUpload } from '@/lib/createUploadQueue';
 
@@ -24,7 +23,6 @@ export default function RootLayout({
 
   const isPublicPage = PUBLIC_PATHS.has(pathname || '');
   const isCreateRoute = (pathname || '').startsWith('/create');
-  const isAdminRoute = (pathname || '').startsWith('/admin');
   const isUsernameOnboardingRoute = (pathname || '').startsWith('/onboarding/username');
 
   useEffect(() => {
@@ -67,12 +65,12 @@ export default function RootLayout({
       setIsVerified(verified);
       setAuthChecked(true);
 
-      if (!verified && pathname !== '/verify-account' && !isAdminRoute) {
+      if (!verified && pathname !== '/verify-account' && !(pathname || '').startsWith('/admin')) {
         router.replace('/verify-account');
         return;
       }
 
-      if (verified && !isAdminRoute) {
+      if (verified && !(pathname || '').startsWith('/admin')) {
         if (!username && !isUsernameOnboardingRoute && pathname !== '/verify-account') {
           router.replace('/onboarding/username');
           return;
@@ -121,7 +119,7 @@ export default function RootLayout({
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [isPublicPage, pathname, router]);
+  }, [isPublicPage, pathname, router, isUsernameOnboardingRoute]);
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -134,36 +132,23 @@ export default function RootLayout({
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
 
-  const showNav = isAuthenticated && isVerified && !isPublicPage && !isCreateRoute && !isAdminRoute && !isUsernameOnboardingRoute;
-  const useSystemContainer = pathname !== '/';
+  const showShell =
+    isAuthenticated &&
+    isVerified &&
+    !isPublicPage &&
+    !isCreateRoute &&
+    !isUsernameOnboardingRoute;
 
   return (
     <html lang="en">
-      <body className="bg-black">
-
+      <body className="min-h-screen overflow-x-hidden bg-[var(--bg-primary)] text-[var(--foreground)] antialiased">
         {!authChecked ? (
-          <div className="min-h-screen bg-black" />
-        ) : showNav ? (
-          <div className="lg:grid lg:min-h-screen lg:grid-cols-[240px_minmax(700px,900px)_minmax(320px,380px)] lg:justify-center lg:gap-6">
-            <DesktopSidebar />
-
-            <div className={`min-w-0 ${pathname === '/' ? 'lg:col-span-2' : ''} md:px-4 lg:px-0`}>
-              {/* ALL PAGES */}
-              {useSystemContainer ? (
-                <main className="mx-auto w-full max-w-[900px] px-4 sm:px-6 lg:px-8">
-                  {children}
-                </main>
-              ) : (
-                children
-              )}
-            </div>
-
-            {pathname !== '/' && <DesktopRightPanel />}
-          </div>
+          <div className="min-h-screen bg-[var(--bg-primary)]" />
+        ) : showShell ? (
+          <AppShell>{children}</AppShell>
         ) : (
           children
         )}
-
       </body>
     </html>
   );

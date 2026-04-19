@@ -237,7 +237,7 @@ export default function SoundPage() {
 
   return (
     <main className="min-h-screen bg-black text-white">
-      <section className="mx-auto w-full max-w-[820px] px-4 py-6">
+      <section className="mx-auto w-full max-w-[960px] px-4 py-6">
         <button type="button" onClick={handlePreviewClick} className="block w-full text-left">
           {sound?.cover_url ? (
             <Image
@@ -292,7 +292,7 @@ export default function SoundPage() {
 
       </section>
 
-      <section className="mx-auto w-full max-w-[820px] px-4 pb-10">
+      <section className="mx-auto w-full max-w-[960px] px-4 pb-10">
         {loading && <div className="text-sm text-white/60">Loading...</div>}
 
         {!loading && posts.length === 0 && <div className="text-sm text-white/60" />}

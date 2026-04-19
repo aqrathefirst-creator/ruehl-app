@@ -1054,7 +1054,7 @@ export default function Page() {
 
   return (
     <div className="min-h-screen bg-black">
-      <div className="mx-auto w-full max-w-[900px] bg-black text-white pb-32">
+      <div className="mx-auto w-full max-w-[960px] bg-black text-white pb-32">
 
         {/* HEADER SECTION */}
         <div className="px-4 pt-4 pb-8 sm:px-6 lg:px-8">

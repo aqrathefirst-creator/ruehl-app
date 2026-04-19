@@ -1460,10 +1460,9 @@ const fetchSuggestedSounds = async (mood: string) => {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="w-full max-w-[1320px] mx-auto pb-36 lg:px-6 xl:px-8">
+      <div className="mx-auto w-full max-w-[600px] pb-36 px-4 lg:px-0">
 
-        <div className="px-4 pt-6 lg:px-5">
-          <div className="space-y-8 lg:grid lg:grid-cols-[minmax(700px,900px)_minmax(320px,380px)] lg:justify-center lg:gap-8 lg:items-start lg:space-y-0">
+        <div className="px-0 pt-6 lg:px-0">
           <div className="space-y-8 lg:min-w-0">
 
           {/* ── NOW FEED ── */}
@@ -1792,8 +1791,6 @@ const fetchSuggestedSounds = async (mood: string) => {
             {renderBreakoutsModule('mb-8')}
             {renderHomeChartsModule()}
           </aside>
-
-          </div>
 
         </div>
       </div>
