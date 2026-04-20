@@ -1,17 +1,21 @@
 import { createServiceRoleSupabase, requireUser } from '@/lib/server/supabase';
 import { jsonError, jsonOk } from '@/lib/server/responses';
 
-type VerificationStatus = 'pending' | 'approved' | 'rejected';
-
+/**
+ * User-facing verification submissions (`verification_submissions`).
+ * Replaces legacy `verification_requests` (dropped by native migration).
+ */
 export async function GET(request: Request) {
   const auth = await requireUser(request.headers.get('authorization'));
   if (!auth.ok) return jsonError(auth.error, auth.status);
 
   const { data, error } = await auth.supabase
-    .from('verification_requests')
-    .select('id, full_name, reason, social_links, status, created_at')
+    .from('verification_submissions')
+    .select(
+      'id, user_id, account_type, account_category, legal_entity_name, website_url, user_notes, document_path, status, rejection_reason, submitted_at, reviewed_at, reviewed_by',
+    )
     .eq('user_id', auth.user.id)
-    .order('created_at', { ascending: false });
+    .order('submitted_at', { ascending: false });
 
   if (error) return jsonError(error.message, 400);
 
@@ -23,84 +27,53 @@ export async function POST(request: Request) {
   if (!auth.ok) return jsonError(auth.error, auth.status);
 
   const body = (await request.json().catch(() => null)) as {
-    full_name?: string;
-    reason?: string;
-    social_links?: Record<string, string>;
+    account_type?: string;
+    account_category?: string;
+    legal_entity_name?: string;
+    website_url?: string | null;
+    user_notes?: string | null;
+    document_path?: string;
   } | null;
 
-  const fullName = body?.full_name?.trim();
-  const reason = body?.reason?.trim();
+  const accountType = body?.account_type?.trim();
+  const accountCategory = body?.account_category?.trim();
+  const legalEntityName = body?.legal_entity_name?.trim();
+  const documentPath = body?.document_path?.trim();
 
-  if (!fullName || fullName.length < 3) return jsonError('full_name is required', 400);
-  if (!reason || reason.length < 10) return jsonError('reason must be at least 10 characters', 400);
+  if (!accountType || !['business', 'media'].includes(accountType)) {
+    return jsonError('account_type must be business or media', 400);
+  }
+  if (!accountCategory || accountCategory.length < 2) {
+    return jsonError('account_category is required', 400);
+  }
+  if (!legalEntityName || legalEntityName.length < 2) {
+    return jsonError('legal_entity_name is required', 400);
+  }
+  if (!documentPath || documentPath.length < 4) {
+    return jsonError(
+      'document_path is required — upload a document to the verification-documents bucket first',
+      400,
+    );
+  }
 
   const { data, error } = await auth.supabase
-    .from('verification_requests')
+    .from('verification_submissions')
     .insert({
       user_id: auth.user.id,
-      full_name: fullName,
-      reason,
-      social_links: body?.social_links || {},
+      account_type: accountType,
+      account_category: accountCategory,
+      legal_entity_name: legalEntityName,
+      website_url: body?.website_url?.trim() || null,
+      user_notes: body?.user_notes?.trim() || null,
+      document_path: documentPath,
       status: 'pending',
     })
-    .select('id, user_id, full_name, reason, social_links, status, created_at')
+    .select(
+      'id, user_id, account_type, account_category, legal_entity_name, website_url, user_notes, document_path, status, submitted_at',
+    )
     .single();
 
   if (error) return jsonError(error.message, 400);
 
   return jsonOk({ item: data }, 201);
-}
-
-export async function PATCH(request: Request) {
-  const auth = await requireUser(request.headers.get('authorization'));
-  if (!auth.ok) return jsonError(auth.error, auth.status);
-
-  const body = (await request.json().catch(() => null)) as {
-    request_id?: string;
-    status?: VerificationStatus;
-  } | null;
-
-  const requestId = body?.request_id?.trim();
-  const status = body?.status;
-
-  if (!requestId) return jsonError('request_id is required', 400);
-  if (status !== 'approved' && status !== 'rejected' && status !== 'pending') {
-    return jsonError('Invalid status', 400);
-  }
-
-  const { data: me, error: meError } = await auth.supabase
-    .from('profiles')
-    .select('id, is_admin')
-    .eq('id', auth.user.id)
-    .single();
-
-  if (meError) return jsonError(meError.message, 400);
-  if (!me?.is_admin) return jsonError('Forbidden', 403);
-
-  const admin = createServiceRoleSupabase();
-
-  const { data: updated, error: updateError } = await admin
-    .from('verification_requests')
-    .update({ status })
-    .eq('id', requestId)
-    .select('id, user_id, status')
-    .single();
-
-  if (updateError) return jsonError(updateError.message, 400);
-
-  if (status === 'approved') {
-    await admin
-      .from('profiles')
-      .update({ is_verified: true, verified: true })
-      .eq('id', updated.user_id);
-  }
-
-  if (status === 'rejected') {
-    await admin
-      .from('profiles')
-      .update({ is_verified: false })
-      .eq('id', updated.user_id);
-  }
-
-  return jsonOk({ item: updated });
 }

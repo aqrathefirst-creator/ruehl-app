@@ -1,8 +1,37 @@
 import { requireAdmin } from '@/lib/server/admin';
 import { jsonError, jsonOk } from '@/lib/server/responses';
+import type { VerificationSubmission, VerificationStatus } from '@/lib/ruehl/verification';
 
-type VerificationStatus = 'approved' | 'rejected';
+export type VerificationQueueItem = VerificationSubmission & {
+  username: string | null;
+  /** From `profiles.badge_verification_status` at queue load time (for admin badge display). */
+  profileBadgeVerificationStatus: string | null;
+};
 
+function mapSubmissionRow(
+  row: Record<string, unknown>,
+  username: string | null,
+  profileBadgeVerificationStatus: string | null,
+): VerificationQueueItem {
+  const base: VerificationSubmission = {
+    id: String(row.id),
+    userId: String(row.user_id),
+    accountType: (row.account_type as 'business' | 'media') || 'business',
+    accountCategory: String(row.account_category || ''),
+    legalEntityName: String(row.legal_entity_name || ''),
+    websiteUrl: row.website_url == null ? null : String(row.website_url),
+    userNotes: row.user_notes == null ? null : String(row.user_notes),
+    documentPath: String(row.document_path || ''),
+    status: row.status as VerificationStatus,
+    rejectionReason: row.rejection_reason == null ? null : String(row.rejection_reason),
+    submittedAt: String(row.submitted_at || ''),
+    reviewedAt: row.reviewed_at == null ? null : String(row.reviewed_at),
+    reviewedBy: row.reviewed_by == null ? null : String(row.reviewed_by),
+  };
+  return { ...base, username, profileBadgeVerificationStatus };
+}
+
+/** Admin queue: pending verification submissions (`verification_submissions`). */
 export async function GET(request: Request) {
   const auth = await requireAdmin(request.headers.get('authorization'));
   if (!auth.ok) return jsonError(auth.error, auth.status);
@@ -10,54 +39,47 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const status = url.searchParams.get('status')?.trim();
 
-  let query = auth.admin
-    .from('verification_requests')
-    .select('id, user_id, full_name, reason, social_links, status, created_at')
-    .order('created_at', { ascending: false });
+  let q = auth.admin
+    .from('verification_submissions')
+    .select(
+      'id, user_id, account_type, account_category, legal_entity_name, website_url, user_notes, document_path, status, rejection_reason, submitted_at, reviewed_at, reviewed_by',
+    )
+    .order('submitted_at', { ascending: false });
 
   if (status) {
-    query = query.eq('status', status);
+    q = q.eq('status', status);
   }
 
-  const { data, error } = await query;
+  const { data: rows, error } = await q;
   if (error) return jsonError(error.message, 400);
 
-  return jsonOk({ items: data || [] });
-}
+  const list = (rows || []) as Record<string, unknown>[];
+  const userIds = [...new Set(list.map((r) => String(r.user_id)))];
+  const usernameByUserId = new Map<string, string | null>();
+  const badgeByUserId = new Map<string, string | null>();
 
-export async function POST(request: Request) {
-  const auth = await requireAdmin(request.headers.get('authorization'));
-  if (!auth.ok) return jsonError(auth.error, auth.status);
+  if (userIds.length > 0) {
+    const { data: profiles, error: pe } = await auth.admin
+      .from('profiles')
+      .select('id, username, badge_verification_status')
+      .in('id', userIds);
+    if (pe) return jsonError(pe.message, 400);
+    for (const p of profiles || []) {
+      const row = p as { id?: string; username?: string | null; badge_verification_status?: string | null };
+      if (row.id) {
+        usernameByUserId.set(row.id, row.username ?? null);
+        badgeByUserId.set(row.id, row.badge_verification_status ?? null);
+      }
+    }
+  }
 
-  const body = (await request.json().catch(() => null)) as {
-    request_id?: string;
-    user_id?: string;
-    status?: VerificationStatus;
-  } | null;
+  const items: VerificationQueueItem[] = list.map((row) =>
+    mapSubmissionRow(
+      row,
+      usernameByUserId.get(String(row.user_id)) ?? null,
+      badgeByUserId.get(String(row.user_id)) ?? null,
+    ),
+  );
 
-  const requestId = body?.request_id?.trim();
-  const userId = body?.user_id?.trim();
-  const status = body?.status;
-
-  if (!requestId) return jsonError('request_id is required', 400);
-  if (!userId) return jsonError('user_id is required', 400);
-  if (status !== 'approved' && status !== 'rejected') return jsonError('Invalid status', 400);
-
-  const notes = `Verification decision requested from moderation queue ${requestId}. Proposed status: ${status}.`;
-
-  const { error: insertError } = await auth.admin
-    .from('admin_requests')
-    .insert({
-      admin_id: auth.user.id,
-      submitted_by: auth.user.id,
-      subject: 'VERIFY_USER',
-      target_id: userId,
-      target: userId,
-      notes,
-      status: 'pending',
-    });
-
-  if (insertError) return jsonError(insertError.message, 400);
-
-  return jsonOk({ success: true, message: 'Request submitted for approval' });
+  return jsonOk({ items });
 }
