@@ -1,14 +1,14 @@
 'use client';
 
 import type { BadgeVerificationStatus } from '@/lib/ruehl/accountTypes';
-import { Clock, CheckCircle2 } from 'lucide-react';
+import { Clock } from 'lucide-react';
 
 type Size = 'sm' | 'md' | 'lg';
 
 const SIZE_MAP: Record<Size, number> = {
-  sm: 14,
-  md: 17,
-  lg: 22,
+  sm: 13,
+  md: 15,
+  lg: 18,
 };
 
 type Props = {
@@ -41,12 +41,23 @@ export default function VerificationBadge({ status, legacyIsVerified, size = 'md
 
   if (display === 'approved') {
     return (
-      <CheckCircle2
-        className="inline-block shrink-0 align-middle text-[var(--accent-verify)]"
+      <svg
+        className="inline-block shrink-0 align-middle"
         style={{ width: px, height: px }}
+        viewBox="0 0 16 16"
+        role="img"
         aria-label="Verified"
-        strokeWidth={2.25}
-      />
+      >
+        <circle cx="8" cy="8" r="8" fill="#4FC3F7" />
+        <path
+          d="M4.8 8.15 6.85 10.2 11.25 5.8"
+          fill="none"
+          stroke="#FFFFFF"
+          strokeWidth="1.85"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
     );
   }
 
