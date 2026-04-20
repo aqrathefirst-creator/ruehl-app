@@ -1,9 +1,38 @@
+import { createBrowserClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+let browserSingleton: SupabaseClient | undefined;
+let serverAnonSingleton: SupabaseClient | undefined;
+
+/** Browser-only singleton (Navigator Lock–safe SSR client). Throws if called on the server. */
+export function getSupabaseBrowser(): SupabaseClient {
+  if (typeof window === 'undefined') {
+    throw new Error('getSupabaseBrowser() must only run in the browser');
+  }
+  browserSingleton ??= createBrowserClient(supabaseUrl, supabaseAnonKey) as unknown as SupabaseClient;
+  return browserSingleton;
+}
+
+function getSingletonClient(): SupabaseClient {
+  if (typeof window !== 'undefined') {
+    browserSingleton ??= createBrowserClient(supabaseUrl, supabaseAnonKey) as unknown as SupabaseClient;
+    return browserSingleton;
+  }
+  serverAnonSingleton ??= createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+  return serverAnonSingleton;
+}
+
+/** One process-local instance per bundle; browser uses `createBrowserClient`, server uses non-persisted anon `createClient`. */
+export const supabase = getSingletonClient();
 
 type ProcessMediaOptions = {
   mobileVideo?: boolean;
