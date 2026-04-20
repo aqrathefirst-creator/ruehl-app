@@ -4,13 +4,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { RuehlPost, RuehlProfile } from '@/lib/ruehl/types';
 import type { AccountCategory } from '@/lib/ruehl/accountTypes';
+import { parseVerificationStatus } from '@/lib/ruehl/verification';
 import { getHomeFeed } from '@/lib/ruehl/queries/feed';
 import FeedCard from '@/components/feed/FeedCard';
 
 const PAGE = 15;
 
 const PROFILE_SELECT =
-  'id, username, avatar_url, bio, identity_text, account_type, account_category, badge_verification_status, is_verified, created_at';
+  'id, username, avatar_url, bio, identity_text, account_type, account_category, badge_verification_status, is_verified, verified, created_at';
 
 function isVideoUrl(url: string) {
   const clean = url.split('?')[0]?.toLowerCase() || '';
@@ -18,6 +19,16 @@ function isVideoUrl(url: string) {
 }
 
 function mapProfile(r: Record<string, unknown>): RuehlProfile {
+  const rawBadge = String(r.badge_verification_status ?? '').trim().toLowerCase();
+  const parsedBadge = parseVerificationStatus(rawBadge);
+  const legacyVerified =
+    typeof r.is_verified === 'boolean'
+      ? r.is_verified
+      : typeof r.verified === 'boolean'
+        ? r.verified
+        : null;
+  const badge = parsedBadge ?? (legacyVerified === true ? 'approved' : null);
+
   return {
     id: String(r.id ?? ''),
     username: r.username == null ? null : String(r.username),
@@ -30,19 +41,14 @@ function mapProfile(r: Record<string, unknown>): RuehlProfile {
         : null,
     account_category:
       r.account_category == null ? null : (String(r.account_category) as AccountCategory),
-    badge_verification_status:
-      r.badge_verification_status === 'pending' ||
-      r.badge_verification_status === 'approved' ||
-      r.badge_verification_status === 'rejected'
-        ? r.badge_verification_status
-        : null,
+    badge_verification_status: badge,
     contact_email: null,
     contact_phone: null,
     website: null,
     display_category_label: null,
     display_contact_info: null,
     category_picked_at: null,
-    is_verified: typeof r.is_verified === 'boolean' ? r.is_verified : null,
+    is_verified: legacyVerified,
     created_at: r.created_at == null ? null : String(r.created_at),
   };
 }

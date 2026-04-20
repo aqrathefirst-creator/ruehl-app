@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import type { RuehlPost, RuehlProfile } from '@/lib/ruehl/types';
 import { normalizePost, resolvePostSound, type PostSoundInput } from '@/lib/ruehl/posts';
 import type { AccountCategory, AccountType, BadgeVerificationStatus } from '@/lib/ruehl/accountTypes';
+import { parseVerificationStatus } from '@/lib/ruehl/verification';
 import {
   buildCreatorBoostByUserId,
   computeSoundTrendBucketsFromPosts,
@@ -24,7 +25,7 @@ function logFeedError(context: string, err: unknown) {
 }
 
 const PROFILE_RAIL_SELECT =
-  'id, username, avatar_url, bio, identity_text, account_type, account_category, badge_verification_status, is_verified, created_at';
+  'id, username, avatar_url, bio, identity_text, account_type, account_category, badge_verification_status, is_verified, verified, created_at';
 
 const ALL_CAT: AccountCategory[] = [
   'personal',
@@ -53,12 +54,20 @@ function parseAccountCategory(raw: string | null): AccountCategory | null {
 
 function parseBadgeVerification(raw: string | null): BadgeVerificationStatus {
   if (raw == null || raw === '') return null;
-  const n = String(raw).trim().toLowerCase();
-  if (n === 'pending' || n === 'approved' || n === 'rejected') return n;
-  return null;
+  return parseVerificationStatus(String(raw).trim().toLowerCase());
 }
 
 function mapProfileRow(p: Record<string, unknown>): RuehlProfile {
+  const parsedBadge = parseBadgeVerification(
+    p.badge_verification_status == null ? null : String(p.badge_verification_status),
+  );
+  const legacyVerified =
+    typeof p.is_verified === 'boolean'
+      ? p.is_verified
+      : typeof p.verified === 'boolean'
+        ? p.verified
+        : null;
+
   return {
     id: String(p.id ?? ''),
     username: typeof p.username === 'string' ? p.username : p.username == null ? null : String(p.username),
@@ -68,16 +77,14 @@ function mapProfileRow(p: Record<string, unknown>): RuehlProfile {
       typeof p.identity_text === 'string' ? p.identity_text : p.identity_text == null ? null : String(p.identity_text),
     account_type: parseAccountType(p.account_type == null ? null : String(p.account_type)),
     account_category: parseAccountCategory(p.account_category == null ? null : String(p.account_category)),
-    badge_verification_status: parseBadgeVerification(
-      p.badge_verification_status == null ? null : String(p.badge_verification_status),
-    ),
+    badge_verification_status: parsedBadge ?? (legacyVerified === true ? 'approved' : null),
     contact_email: null,
     contact_phone: null,
     website: null,
     display_category_label: null,
     display_contact_info: null,
     category_picked_at: null,
-    is_verified: typeof p.is_verified === 'boolean' ? p.is_verified : null,
+    is_verified: legacyVerified,
     created_at: p.created_at == null ? null : String(p.created_at),
   };
 }

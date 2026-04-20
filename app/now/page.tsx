@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import VerificationBadge from '@/components/VerificationBadge';
+import VerificationBadge from '@/components/profile/VerificationBadge';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/useUser';
 import { getNowFeed } from '@/lib/ruehl/queries/feed';
+import { parseVerificationStatus } from '@/lib/ruehl/verification';
 import type { RuehlPost, RuehlProfile } from '@/lib/ruehl/types';
 
 const PAGE_SIZE = 12;
@@ -24,19 +25,15 @@ function formatRelativeTime(createdAt: string | null): string {
 }
 
 function mapProfile(row: Record<string, unknown>): RuehlProfile {
-  const rawBadge = String(row.badge_verification_status ?? '')
-    .trim()
-    .toLowerCase();
-  const badge =
-    rawBadge === 'pending' || rawBadge === 'approved' || rawBadge === 'rejected'
-      ? rawBadge
-      : null;
+  const rawBadge = String(row.badge_verification_status ?? '').trim().toLowerCase();
+  const parsedBadge = parseVerificationStatus(rawBadge);
   const legacyVerified =
     typeof row.is_verified === 'boolean'
       ? row.is_verified
       : typeof row.verified === 'boolean'
         ? row.verified
         : null;
+  const badge = parsedBadge ?? (legacyVerified === true ? 'approved' : null);
 
   return {
     id: String(row.id ?? ''),
@@ -148,14 +145,15 @@ export default function NowPage() {
         {postRows.map((post) => {
           const author = profilesById[post.user_id] ?? null;
           const authorName = author?.username || 'user';
-          const verified = Boolean(author?.is_verified);
+          const badgeStatus = author?.badge_verification_status ?? null;
+          const legacyVerified = author?.is_verified ?? null;
           return (
             <article key={post.id} className="space-y-3">
               <div className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)]">
                 <Link href={`/profile/${post.user_id}`} className="font-semibold text-[var(--text-primary)] hover:opacity-80">
                   @{authorName}
                 </Link>
-                {verified ? <VerificationBadge /> : null}
+                <VerificationBadge status={badgeStatus} legacyIsVerified={legacyVerified} size="sm" />
                 <span className="text-[var(--text-meta)]">{formatRelativeTime(post.created_at || null)}</span>
               </div>
 

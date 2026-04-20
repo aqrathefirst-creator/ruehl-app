@@ -82,7 +82,12 @@ export default function FeedCard({
   const profileHref = `/${encodeURIComponent(username)}`;
 
   const badgeStatus = author?.badge_verification_status ?? null;
-  const legacyVerified = Boolean(author?.is_verified);
+  const legacyVerified =
+    typeof author?.is_verified === 'boolean'
+      ? author.is_verified
+      : typeof (author as (RuehlProfile & { verified?: boolean | null }) | null)?.verified === 'boolean'
+        ? Boolean((author as RuehlProfile & { verified?: boolean | null }).verified)
+        : null;
 
   const handleLift = useCallback(async () => {
     if (liftBusy) return;
