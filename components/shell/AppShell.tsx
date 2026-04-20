@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import BottomNav from '@/components/BottomNav';
 import NavRail from '@/components/shell/NavRail';
+import { ProfileRailUserIdProvider, useProfileRailUserId } from '@/components/shell/ProfileRailUserIdProvider';
 import RightRail from '@/components/shell/RightRail';
 import TopBar from '@/components/shell/TopBar';
 import { supabase } from '@/lib/supabase';
@@ -14,8 +15,9 @@ type Props = {
   children: React.ReactNode;
 };
 
-export default function AppShell({ children }: Props) {
+function AppShellInner({ children }: Props) {
   const pathname = usePathname() || '';
+  const { profileUserId } = useProfileRailUserId();
   const { user } = useUser();
   const [showAdmin, setShowAdmin] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -65,7 +67,7 @@ export default function AppShell({ children }: Props) {
     <div className="min-h-screen overflow-x-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
       <NavRail profileHref={profileHref} showAdmin={showAdmin} onOpenCreate={() => setCreateOpen(true)} />
       <TopBar profileHref={profileHref} showAdmin={showAdmin} onOpenCreate={() => setCreateOpen(true)} />
-      <RightRail variant={rightRailVariant} />
+      <RightRail variant={rightRailVariant} profileUserId={profileUserId} />
 
       <main className={`min-h-screen min-w-0 ${mainMarginLeft} ${mainMarginRight} ${mainPadTop}`}>
         <div className="min-h-screen w-full min-w-0">{children}</div>
@@ -98,5 +100,13 @@ export default function AppShell({ children }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AppShell({ children }: Props) {
+  return (
+    <ProfileRailUserIdProvider>
+      <AppShellInner>{children}</AppShellInner>
+    </ProfileRailUserIdProvider>
   );
 }

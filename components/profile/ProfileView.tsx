@@ -5,18 +5,16 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import { supabase } from '@/lib/supabase';
 import type { RuehlProfile } from '@/lib/ruehl/types';
 import {
-  getCurrentSound,
   getFollowersCount,
   getFollowingCount,
   getProfileLenient,
   getProfilePostCount,
   getProfilePosts,
-  type CurrentSoundDisplay,
   type ProfileTab,
 } from '@/lib/ruehl/queries/profile';
 import type { RuehlPost } from '@/lib/ruehl/types';
 import ProfileHeader from '@/components/profile/ProfileHeader';
-import CurrentSoundCard from '@/components/profile/CurrentSoundCard';
+import { useProfileRailUserId } from '@/components/shell/ProfileRailUserIdProvider';
 import ProfileTabs from '@/components/profile/ProfileTabs';
 import ProfileTabContent from '@/components/profile/ProfileTabContent';
 import ProfileLoadingSkeleton from '@/components/profile/ProfileLoadingSkeleton';
@@ -57,7 +55,7 @@ export default function ProfileView() {
   const [tabLoading, setTabLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
 
-  const [currentSound, setCurrentSound] = useState<CurrentSoundDisplay | null>(null);
+  const { setProfileUserId } = useProfileRailUserId();
 
   useEffect(() => {
     setActiveTab(tabParam);
@@ -104,6 +102,18 @@ export default function ProfileView() {
   }, [routeParam]);
 
   useEffect(() => {
+    setProfileUserId(null);
+  }, [routeParam, setProfileUserId]);
+
+  useEffect(() => {
+    if (boot || notFound || !profile?.id) {
+      return;
+    }
+    setProfileUserId(profile.id);
+    return () => setProfileUserId(null);
+  }, [boot, notFound, profile?.id, setProfileUserId]);
+
+  useEffect(() => {
     if (!profile?.id) return;
     const un = String(profile.username || '').trim().toLowerCase();
     if (un && pathname?.startsWith('/profile/') && isUuid(routeParam)) {
@@ -116,17 +126,15 @@ export default function ProfileView() {
     let cancelled = false;
     (async () => {
       try {
-        const [pc, fc, fol, sound] = await Promise.all([
+        const [pc, fc, fol] = await Promise.all([
           getProfilePostCount(profile.id),
           getFollowersCount(profile.id),
           getFollowingCount(profile.id),
-          getCurrentSound(profile.id),
         ]);
         if (cancelled) return;
         setStats({ posts: pc, followers: fc, following: fol });
-        setCurrentSound(sound);
       } catch {
-        if (!cancelled) setCurrentSound(null);
+        /* stats best-effort */
       }
     })();
     return () => {
@@ -236,15 +244,6 @@ export default function ProfileView() {
         followLoading={followBusy}
         isFollowing={followingThem}
       />
-
-      {currentSound ? (
-        <div className="mt-6 max-w-md">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-meta)]">
-            Current sound
-          </p>
-          <CurrentSoundCard sound={currentSound} />
-        </div>
-      ) : null}
 
       <ProfileTabs active={activeTab} onChange={onTabChange} />
 
