@@ -37,10 +37,7 @@ function AppShellInner({ children }: Props) {
 
       if (cancelled) return;
 
-      /**
-       * TODO WEB_DIRECTION §7 — authoritative `is_admin` lives on `public.users` after native migrations.
-       * Admin API routes still read `profiles.is_admin` in places; reconcile in Phase 2.4.
-       */
+      /** WEB_DIRECTION §7 — admin UI gate uses `public.users.is_admin` (same source as institutional `requireAdmin`). */
       if (error || data == null) {
         setShowAdmin(false);
         return;

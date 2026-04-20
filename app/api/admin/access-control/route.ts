@@ -89,10 +89,8 @@ export async function PATCH(request: Request) {
   if (missingTable) return jsonError('admin_users table is not migrated yet. Run Supabase migrations first.', 400);
   if (error) return jsonError(error.message, 400);
 
-  await access.auth.admin
-    .from('profiles')
-    .update({ is_admin: true, is_verified: true, verified: true })
-    .eq('id', id);
+  await access.auth.admin.from('users').update({ is_admin: true }).eq('id', id);
+  await access.auth.admin.from('profiles').update({ is_verified: true, verified: true }).eq('id', id);
 
   return jsonOk({ success: true });
 }
@@ -124,7 +122,7 @@ export async function DELETE(request: Request) {
   if (missingTable) return jsonError('admin_users table is not migrated yet. Run Supabase migrations first.', 400);
   if (error) return jsonError(error.message, 400);
 
-  await access.auth.admin.from('profiles').update({ is_admin: false }).eq('id', id);
+  await access.auth.admin.from('users').update({ is_admin: false }).eq('id', id);
 
   return jsonOk({ success: true });
 }

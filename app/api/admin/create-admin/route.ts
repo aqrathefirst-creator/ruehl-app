@@ -92,9 +92,10 @@ export async function POST(request: Request) {
       throw new Error(insertError.message || 'Failed to create admin profile');
     }
 
+    await access.auth.admin.from('users').update({ is_admin: true }).eq('id', createdAuthUser.user.id);
     await access.auth.admin
       .from('profiles')
-      .update({ is_admin: true, is_verified: true, verified: true })
+      .update({ is_verified: true, verified: true })
       .eq('id', createdAuthUser.user.id);
 
     return jsonOk({
