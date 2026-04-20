@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { User } from '@supabase/supabase-js';
+import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
 type UserProfile = {
@@ -17,21 +17,10 @@ export const useUser = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadUser = async () => {
-      const cachedUser = sessionStorage.getItem('ruehl:user');
-      const cachedProfile = sessionStorage.getItem('ruehl:profile');
+    let mounted = true;
 
-      if (cachedUser) {
-        setUser(JSON.parse(cachedUser) as User);
-      }
-
-      if (cachedProfile) {
-        setProfile(JSON.parse(cachedProfile) as UserProfile);
-      }
-
-      const { data } = await supabase.auth.getUser();
-      const authUser = data.user;
-
+    const hydrateFromSession = async (session: Session | null) => {
+      const authUser = session?.user ?? null;
       setUser(authUser);
 
       if (authUser) {
@@ -42,7 +31,8 @@ export const useUser = () => {
       }
 
       if (!authUser) {
-        setLoading(false);
+        setProfile(null);
+        if (mounted) setLoading(false);
         return;
       }
 
@@ -52,6 +42,8 @@ export const useUser = () => {
         .eq('id', authUser.id)
         .single();
 
+      if (!mounted) return;
+
       setProfile(profileData || null);
       if (profileData) {
         sessionStorage.setItem('ruehl:profile', JSON.stringify(profileData));
@@ -59,14 +51,40 @@ export const useUser = () => {
       setLoading(false);
     };
 
-    loadUser();
+    const cachedUser = sessionStorage.getItem('ruehl:user');
+    const cachedProfile = sessionStorage.getItem('ruehl:profile');
 
-    const { data: subscription } = supabase.auth.onAuthStateChange(() => {
-      void loadUser();
+    if (cachedUser) {
+      try {
+        setUser(JSON.parse(cachedUser) as User);
+      } catch {
+        sessionStorage.removeItem('ruehl:user');
+      }
+    }
+
+    if (cachedProfile) {
+      try {
+        setProfile(JSON.parse(cachedProfile) as UserProfile);
+      } catch {
+        sessionStorage.removeItem('ruehl:profile');
+      }
+    }
+
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
+      void hydrateFromSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      void hydrateFromSession(session);
     });
 
     return () => {
-      subscription.subscription.unsubscribe();
+      mounted = false;
+      subscription.unsubscribe();
     };
   }, []);
 
