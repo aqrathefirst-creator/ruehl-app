@@ -15,8 +15,10 @@ export default function EditProfile() {
 
   useEffect(() => {
     const loadProfile = async () => {
-      const { data } = await supabase.auth.getUser();
-      const currentUser = data.user;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? null;
 
       if (!currentUser) return;
 

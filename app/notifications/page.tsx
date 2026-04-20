@@ -35,8 +35,10 @@ export default function NotificationsPage() {
   // INITIAL LOAD
   useEffect(() => {
     const init = async () => {
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData.user;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
       setCurrentUser(user);
 
       if (!user) return;

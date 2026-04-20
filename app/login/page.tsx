@@ -42,8 +42,10 @@ export default function LoginPage() {
   };
 
   const redirectAfterAuth = async () => {
-    const { data: authData } = await supabase.auth.getUser();
-    const signedInUser = authData.user;
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const signedInUser = session?.user ?? null;
 
     if (!signedInUser?.id) {
       router.replace('/');

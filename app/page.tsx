@@ -317,11 +317,11 @@ const [suggestedSounds, setSuggestedSounds] = useState<any[]>([]);
   };
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (data.user) {
-        localStorage.setItem('user_id', data.user.id);
+    void supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const user = session?.user ?? null;
+      if (user) {
+        localStorage.setItem('user_id', user.id);
       }
-      const user = data.user;
       setCurrentUser(user);
 
       if (!user) return;

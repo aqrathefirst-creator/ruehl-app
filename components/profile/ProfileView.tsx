@@ -15,6 +15,7 @@ import {
 import type { RuehlPost } from '@/lib/ruehl/types';
 import ProfileHeader from '@/components/profile/ProfileHeader';
 import { useProfileRailUserId } from '@/components/shell/ProfileRailUserIdProvider';
+import { useUser } from '@/lib/useUser';
 import ProfileTabs from '@/components/profile/ProfileTabs';
 import ProfileTabContent from '@/components/profile/ProfileTabContent';
 import ProfileLoadingSkeleton from '@/components/profile/ProfileLoadingSkeleton';
@@ -46,7 +47,6 @@ export default function ProfileView() {
   const [profile, setProfile] = useState<RuehlProfile | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [stats, setStats] = useState({ posts: 0, followers: 0, following: 0 });
-  const [viewerId, setViewerId] = useState<string | null>(null);
   const [followingThem, setFollowingThem] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
 
@@ -56,21 +56,12 @@ export default function ProfileView() {
   const [hasMore, setHasMore] = useState(false);
 
   const { setProfileUserId } = useProfileRailUserId();
+  const { user: authUser } = useUser();
+  const viewerId = authUser?.id ?? null;
 
   useEffect(() => {
     setActiveTab(tabParam);
   }, [tabParam]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!cancelled) setViewerId(data.user?.id ?? null);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;

@@ -19,9 +19,11 @@ export default function SavedSoundsPage() {
   const [sounds, setSounds] = useState<Sound[]>([])
 
   async function init() {
-    const { data } = await supabase.auth.getUser()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
 
-    if (!data.user) return
+    if (!session?.user) return
 
     const { data: saved } = await supabase
       .from('saved_sounds')

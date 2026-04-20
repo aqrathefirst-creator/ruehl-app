@@ -67,8 +67,10 @@ export default function RequestModal({
   const uploadAttachment = async () => {
     if (!attachmentFile) return attachmentUrl.trim() || undefined;
 
-    const { data: authData } = await supabase.auth.getUser();
-    const userId = authData.user?.id;
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
     if (!userId) throw new Error('Missing auth session');
 
     const ext = attachmentFile.name.includes('.') ? attachmentFile.name.split('.').pop() : 'bin';

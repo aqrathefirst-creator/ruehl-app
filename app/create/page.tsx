@@ -844,8 +844,8 @@ export default function CreatePage() {
   }, []);
 
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data }) => {
-      setCurrentUserId(data.user?.id || null);
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      setCurrentUserId(session?.user?.id || null);
     });
   }, []);
 
@@ -1928,8 +1928,9 @@ export default function CreatePage() {
 
     try {
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
 
       if (!user) {
         setError('Please sign in to post.');

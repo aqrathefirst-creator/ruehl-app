@@ -41,8 +41,9 @@ export default function UsernameOnboardingPage() {
 
     const bootstrap = async () => {
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
 
       if (!active) return;
 
@@ -154,8 +155,9 @@ export default function UsernameOnboardingPage() {
     setSaving(true);
 
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (!user) {
       setSaving(false);

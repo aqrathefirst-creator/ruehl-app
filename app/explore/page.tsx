@@ -69,8 +69,10 @@ export default function ExplorePage() {
   const init = useCallback(async () => {
     setLoading(true);
 
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData.user;
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     setCurrentUser(user);
 
     const { data: postsData } = await supabase

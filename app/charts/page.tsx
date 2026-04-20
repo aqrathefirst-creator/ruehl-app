@@ -561,8 +561,10 @@ export default function ChartsPage() {
         setBreakoutRows([])
       }
 
-      const { data: authData } = await supabase.auth.getUser()
-      const userId = authData.user?.id
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const userId = session?.user?.id
 
       if (!userId) {
         if (isMounted) setUserUsedSoundIds(new Set())

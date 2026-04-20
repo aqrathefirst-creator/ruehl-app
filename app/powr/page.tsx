@@ -56,8 +56,10 @@ export default function PowrFeedPage() {
   const [commentInput, setCommentInput] = useState('');
 
   async function fetchUser() {
-    const { data } = await supabase.auth.getUser();
-    setUser((data.user as AuthUser | null) || null);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    setUser((session?.user as AuthUser | null) || null);
   }
 
   async function fetchPosts(pageNumber = 0, reset = true) {

@@ -18,8 +18,10 @@ export default function AdminLoginPage() {
     let active = true;
 
     const checkCurrentSession = async () => {
-      const { data } = await supabase.auth.getUser();
-      const user = data.user;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
 
       if (!active || !user) return;
 
@@ -64,8 +66,10 @@ export default function AdminLoginPage() {
         throw signInError;
       }
 
-      const { data } = await supabase.auth.getUser();
-      const signedInUser = data.user;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const signedInUser = session?.user ?? null;
 
       if (!signedInUser?.id) {
         throw new Error('Unable to verify session.');

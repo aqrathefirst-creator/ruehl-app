@@ -453,10 +453,13 @@ export default function AdminPage() {
     let mounted = true;
 
     const bootstrap = async () => {
-      const { data } = await supabase.auth.getUser();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!mounted) return;
 
-      if (!data.user) {
+      const authUser = session?.user ?? null;
+      if (!authUser) {
         router.replace('/admin/login');
         return;
       }
@@ -464,7 +467,7 @@ export default function AdminPage() {
       const { data: profile } = await supabase
         .from('admin_users')
         .select('id')
-        .eq('id', data.user.id)
+        .eq('id', authUser.id)
         .maybeSingle();
       if (!mounted) return;
 

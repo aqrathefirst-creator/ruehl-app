@@ -72,8 +72,10 @@ export default function VerifyAccountPage() {
         return;
       }
 
-      const { data } = await supabase.auth.getUser();
-      const authUser = data.user;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const authUser = session?.user ?? null;
 
       if (!active || !authUser) return;
 
@@ -118,8 +120,10 @@ export default function VerifyAccountPage() {
   };
 
   const markProfileVerified = async () => {
-    const { data } = await supabase.auth.getUser();
-    const authUser = data.user;
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const authUser = session?.user ?? null;
 
     if (!authUser?.id) return;
 
