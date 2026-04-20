@@ -93,7 +93,11 @@ export default function ProfileHeader({
           >
             @{un}
           </h1>
-          <VerificationBadge status={profile.badge_verification_status} size="md" />
+          <VerificationBadge
+            status={profile.badge_verification_status}
+            legacyIsVerified={profile.is_verified}
+            size="md"
+          />
         </div>
 
         <AccountTypeChip

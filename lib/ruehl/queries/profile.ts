@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import type { AccountCategory, AccountType } from '@/lib/ruehl/accountTypes';
 import type { RuehlPost, RuehlProfile } from '@/lib/ruehl/types';
 import { isPowrPost, normalizePost, resolvePostSound, type ResolvedSound } from '@/lib/ruehl/posts';
-import type { VerificationStatus } from '@/lib/ruehl/verification';
+import { parseVerificationStatus } from '@/lib/ruehl/verification';
 import type { PostgrestError } from '@supabase/supabase-js';
 
 function isMissingColumnError(err: PostgrestError): boolean {
@@ -53,8 +53,9 @@ function parseAccountCategory(raw: string | null): AccountCategory | null {
 }
 
 function parseBadgeVerification(raw: string | null): RuehlProfile['badge_verification_status'] {
-  if (raw === 'pending' || raw === 'approved' || raw === 'rejected') return raw as VerificationStatus;
-  return null;
+  if (raw == null || raw === '') return null;
+  const normalized = String(raw).trim().toLowerCase();
+  return parseVerificationStatus(normalized);
 }
 
 function mapProfileRow(p: Record<string, unknown>, u: Record<string, unknown> | null): RuehlProfile {
