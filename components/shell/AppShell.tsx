@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import BottomNav from '@/components/BottomNav';
 import NavRail from '@/components/shell/NavRail';
-import { ProfileRailUserIdProvider, useProfileRailUserId } from '@/components/shell/ProfileRailUserIdProvider';
+import { useProfileRailUserId } from '@/components/shell/ProfileRailUserIdProvider';
 import RightRail from '@/components/shell/RightRail';
 import TopBar from '@/components/shell/TopBar';
 import { supabase } from '@/lib/supabase';
@@ -104,9 +104,5 @@ function AppShellInner({ children }: Props) {
 }
 
 export default function AppShell({ children }: Props) {
-  return (
-    <ProfileRailUserIdProvider>
-      <AppShellInner>{children}</AppShellInner>
-    </ProfileRailUserIdProvider>
-  );
+  return <AppShellInner>{children}</AppShellInner>;
 }

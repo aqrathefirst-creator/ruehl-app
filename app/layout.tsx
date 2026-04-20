@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import './globals.css';
 import AppShell from '@/components/shell/AppShell';
+import { ProfileRailUserIdProvider } from '@/components/shell/ProfileRailUserIdProvider';
 import { supabase } from '@/lib/supabase';
 import { hasActiveCreateUpload } from '@/lib/createUploadQueue';
 
@@ -145,7 +146,9 @@ export default function RootLayout({
         {!authChecked ? (
           <div className="min-h-screen bg-[var(--bg-primary)]" />
         ) : showShell ? (
-          <AppShell>{children}</AppShell>
+          <ProfileRailUserIdProvider>
+            <AppShell>{children}</AppShell>
+          </ProfileRailUserIdProvider>
         ) : (
           children
         )}
