@@ -84,11 +84,7 @@ export default function ExplorePage() {
     const { data: commentsData } = await supabase.from('comments').select('*');
     const { data: likesData } = await supabase.from('likes').select('*');
     const { data: followsData } = await supabase.from('follows').select('*');
-    const { data: soundsData } = await supabase
-      .from('sounds')
-      .select('id, track_name, artist_name, cover_url, category')
-      .order('usage_count', { ascending: false })
-      .limit(300);
+    const { data: soundsData } = await supabase.from('licensed_tracks').select('*').order('id', { ascending: false }).limit(300);
     const { data: adminGenresData } = await supabase
       .from('admin_genres')
       .select('name')
@@ -104,7 +100,17 @@ export default function ExplorePage() {
     setProfiles(visibleProfiles);
     setComments(commentsData || []);
     setLikes(likesData || []);
-    setSounds((soundsData as Sound[]) || []);
+    const mappedSounds: Sound[] = (soundsData || []).map((r) => {
+      const row = r as Record<string, unknown>;
+      return {
+        id: String(row.id ?? ''),
+        track_name: String(row.title ?? row.name ?? row.track_title ?? '') || null,
+        artist_name: String(row.artist ?? row.artist_name ?? '') || null,
+        cover_url: (row.cover_url as string | null | undefined) || null,
+        category: (row.category as string | null | undefined) ?? null,
+      };
+    });
+    setSounds(mappedSounds);
     setGenreOptions((((adminGenresData || []) as { name?: string | null }[]).map((item) => item.name || '').filter(Boolean)) as string[]);
     if (user?.id && profilesData && followsData) {
       generateSuggestions(profilesData, followsData, user.id);

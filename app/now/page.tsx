@@ -184,61 +184,11 @@ export default function NowFeedPage() {
       storiesPayload,
       storyViewsPayload,
     ] = await Promise.all([
-      (async () => {
-        const primary = await supabase
-          .from('posts')
-          .select(`
-            id,
-            content,
-            media_url,
-            created_at,
-            likes_count,
-            comments_count,
-            sound_id,
-            genre,
-            mood,
-            activity,
-            alignment_score,
-            user_id,
-            track_name,
-            artist_name,
-            hidden_by_admin,
-            discovery_disabled,
-            sounds (
-              total_posts,
-              unique_users,
-              adaptive_weight
-            )
-          `)
-          .order('created_at', { ascending: false })
-          .limit(240);
-
-        if (!primary.error) return primary;
-
-        const missingSignalCols = /total_posts|unique_users|adaptive_weight|likes_count|comments_count|mood|activity|alignment_score/i.test(primary.error.message || '');
-        if (!missingSignalCols) return primary;
-
-        return supabase
-          .from('posts')
-          .select(`
-            id,
-            content,
-            media_url,
-            created_at,
-            sound_id,
-            genre,
-            mood,
-            activity,
-            alignment_score,
-            user_id,
-            track_name,
-            artist_name,
-            hidden_by_admin,
-            discovery_disabled
-          `)
-          .order('created_at', { ascending: false })
-          .limit(240);
-      })(),
+      supabase
+        .from('posts')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(240),
       supabase.from('profiles').select('*'),
       supabase.from('likes').select('*'),
       supabase.from('comments').select('*'),
@@ -384,20 +334,24 @@ export default function NowFeedPage() {
     let coverBySoundId = new Map<string, { cover_url: string | null; preview_url: string | null; adaptive_weight: number }>();
 
     if (soundIds.length > 0) {
-      const { data: soundRows } = await supabase
-        .from('sounds')
-        .select('id, cover_url, thumbnail_url, preview_url, adaptive_weight')
-        .in('id', soundIds);
+      const { data: ltRows } = await supabase.from('licensed_tracks').select('*').in('id', soundIds);
 
       coverBySoundId = new Map(
-        (soundRows || []).map((item) => [
-          item.id,
-          {
-            cover_url: item.cover_url || item.thumbnail_url || null,
-            preview_url: item.preview_url || null,
-            adaptive_weight: item.adaptive_weight || 1,
-          },
-        ])
+        (ltRows || []).map((row) => {
+          const item = row as Record<string, unknown>;
+          const id = String(item.id ?? '');
+          const cover =
+            (item.cover_url as string | null | undefined) || (item.thumbnail_url as string | null | undefined) || null;
+          const preview = (item.preview_url as string | null | undefined) || null;
+          return [
+            id,
+            {
+              cover_url: cover,
+              preview_url: preview,
+              adaptive_weight: Number(item.adaptive_weight ?? item.usage_count ?? 1) || 1,
+            },
+          ];
+        }),
       );
     }
 

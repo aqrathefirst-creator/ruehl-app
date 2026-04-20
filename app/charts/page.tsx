@@ -17,24 +17,6 @@ type ChartRow = {
   usage_count?: number
 }
 
-type RawChartRow = {
-  sound_id: string | null
-  rank: number | null
-  movement: string | null
-  lifecycle: string | null
-  sounds: {
-    id: string | null
-    track_name: string | null
-    artist_name: string | null
-    title: string | null
-    artist: string | null
-    cover_url: string | null
-    thumbnail_url: string | null
-    preview_url: string | null
-    usage_count: number | null
-  } | null
-}
-
 type UserSoundUsageRow = {
   sound_id: string | null
   created_at: string | null
@@ -264,72 +246,14 @@ export default function ChartsPage() {
     const loadCharts = async () => {
       setLoading(true)
 
-      const selectAttempts = [
-        `
-          sound_id,
-          rank,
-          movement,
-          lifecycle,
-          sounds (
-            id,
-            track_name,
-            artist_name,
-            title,
-            artist,
-            cover_url,
-            thumbnail_url,
-            preview_url,
-            usage_count
-          )
-        `,
-        `
-          sound_id,
-          rank,
-          movement,
-          lifecycle,
-          sounds (
-            id,
-            track_name,
-            artist_name,
-            title,
-            artist,
-            cover_url,
-            thumbnail_url,
-            preview_url
-          )
-        `,
-        `
-          sound_id,
-          rank,
-          movement,
-          lifecycle,
-          sounds (
-            id,
-            track_name,
-            artist_name,
-            title,
-            artist
-          )
-        `,
-      ]
+      const { data: scoreRows, error: scoreError } = await supabase
+        .from('chart_scores')
+        .select('sound_id, rank, movement, lifecycle')
+        .order('rank', { ascending: true })
+        .limit(20)
 
-      let data: unknown = null
-      let error: { message?: string } | null = null
-
-      for (const select of selectAttempts) {
-        const result = await supabase
-          .from('chart_scores')
-          .select(select)
-          .order('rank', { ascending: true })
-          .limit(20)
-
-        data = result.data
-        error = result.error
-        if (!error) break
-      }
-
-      if (error) {
-        console.error(error)
+      if (scoreError) {
+        console.error(scoreError)
         if (isMounted) {
           setRows([])
           setLoading(false)
@@ -337,28 +261,47 @@ export default function ChartsPage() {
         return
       }
 
-      const charts = (((data as unknown) as RawChartRow[] | null) || []).map((row) => ({
-        sound_id: row.sound_id ?? null,
-        rank: row.rank ?? 0,
-        movement: row.movement,
-        lifecycle: row.lifecycle,
-        title:
-          row.sounds?.track_name ||
-          row.sounds?.title ||
-          '',
-        artist:
-          row.sounds?.artist_name ||
-          row.sounds?.artist ||
-          '',
-        cover_url: row.sounds?.cover_url || row.sounds?.thumbnail_url || null,
-        preview_url: row.sounds?.preview_url || null,
-        usage_count: row.sounds?.usage_count || 0,
-      }))
+      const base = ((scoreRows as { sound_id: string | null; rank: number | null; movement: string | null; lifecycle: string | null }[] | null) || []).filter(
+        (r) => r.sound_id,
+      )
 
-      console.log('CHART DATA:', charts)
-      if (!charts.length || !charts[0].title) {
-        console.error('CHART DATA MISSING — CHECK DB OR JOIN')
+      const soundIds = [...new Set(base.map((r) => r.sound_id as string))]
+
+      let metaById = new Map<string, { title: string; artist: string; cover: string | null; preview: string | null; usage: number }>()
+      if (soundIds.length > 0) {
+        const { data: ltRows } = await supabase.from('licensed_tracks').select('*').in('id', soundIds)
+        metaById = new Map(
+          (ltRows || []).map((row) => {
+            const raw = row as Record<string, unknown>
+            const id = String(raw.id ?? '')
+            const title = String(raw.title ?? raw.name ?? raw.track_title ?? '').trim()
+            const artist = String(raw.artist ?? raw.artist_name ?? '').trim()
+            const cover =
+              (raw.cover_url as string | null | undefined) ||
+              (raw.thumbnail_url as string | null | undefined) ||
+              null
+            const preview = (raw.preview_url as string | null | undefined) || null
+            const usage = Number(raw.usage_count ?? 0)
+            return [id, { title, artist, cover, preview, usage }]
+          }),
+        )
       }
+
+      const charts: ChartRow[] = base.map((row) => {
+        const sid = row.sound_id as string
+        const m = metaById.get(sid)
+        return {
+          sound_id: sid,
+          rank: row.rank ?? 0,
+          movement: row.movement,
+          lifecycle: row.lifecycle,
+          title: m?.title || 'Unknown track',
+          artist: m?.artist || '',
+          cover_url: m?.cover ?? null,
+          preview_url: m?.preview ?? null,
+          usage_count: m?.usage ?? 0,
+        }
+      })
 
       if (isMounted) {
         setRows(charts)
