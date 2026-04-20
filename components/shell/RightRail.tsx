@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import CurrentSoundCard from '@/components/profile/CurrentSoundCard';
+import NowTrendingModule from '@/components/rail/NowTrendingModule';
+import SuggestedForYouModule from '@/components/rail/SuggestedForYouModule';
 import type { RightRailVariant } from '@/lib/shell/rightRailVariant';
 import { getCurrentSound, type CurrentSoundDisplay } from '@/lib/ruehl/queries/profile';
 
@@ -55,14 +57,8 @@ export default function RightRail({ variant, profileUserId = null }: Props) {
       <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overflow-x-hidden">
         {variant === 'home' && (
           <>
-            <section className="rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--bg-secondary)] p-4">
-              <h3 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">Now Trending</h3>
-              <p className="text-xs text-[var(--text-muted)]">Placeholder — data wiring in Phase 2.5</p>
-            </section>
-            <section className="rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--bg-secondary)] p-4">
-              <h3 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">Suggested for you</h3>
-              <p className="text-xs text-[var(--text-muted)]">Placeholder — data wiring in Phase 2.5</p>
-            </section>
+            <NowTrendingModule />
+            <SuggestedForYouModule />
           </>
         )}
         {variant === 'profile' && (
