@@ -202,32 +202,41 @@ export async function getHomeFeed(currentUserId: string | null, limit: number, o
 }
 
 /**
- * “Now” — last 24h posts, ordered by engagement + lifts (heuristic; no native recovery flags).
+ * “Now” — mirrors native `HomeFeedScreen` `feedType === 'now'`:
+ * - source: `posts` table
+ * - filter 1: `media_type = 'video'`
+ * - filter 2: non-empty `media_url` (renderability)
+ * - no additional time-window / engagement-threshold filter
  */
-export async function getNowFeed(currentUserId: string | null, limit: number): Promise<RuehlPost[]> {
+export async function getNowFeed(
+  currentUserId: string | null,
+  limit: number,
+  offset = 0,
+): Promise<RuehlPost[]> {
   try {
-    const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const upper = Math.max(offset + limit - 1, offset);
     const { data, error } = await supabase
       .from('posts')
       .select('*')
-      .gte('created_at', cutoffIso)
+      .eq('media_type', 'video')
       .order('created_at', { ascending: false })
-      .limit(220);
+      .range(offset, upper);
+
     if (error) {
       logFeedError('getNowFeed posts', error);
       return [];
     }
-    let rows = (data || [])
-      .filter((r) => isPostRowVisible(r as Record<string, unknown>))
-      .map((r) => rowToRuehlPost(r as Record<string, unknown>));
+
+    let rows = ((data || []) as Record<string, unknown>[])
+      .filter((r) => isPostRowVisible(r))
+      .filter((r) => !!String(r.media_url || '').trim());
+
     if (currentUserId) {
       const blocked = await loadMutualBlockUserIds(currentUserId);
-      rows = rows.filter((p) => !blocked.has(p.user_id));
+      rows = rows.filter((r) => !blocked.has(String(r.user_id || '')));
     }
-    const boost = buildCreatorBoostByUserId(rows as unknown as { user_id?: string }[], (row) =>
-      postEngagementScore(row as RuehlPost),
-    );
-    return rankFeedPosts(rows, boost).slice(0, limit);
+
+    return rows.map((r) => rowToRuehlPost(r)).slice(0, limit);
   } catch (e) {
     logFeedError('getNowFeed', e);
     return [];
