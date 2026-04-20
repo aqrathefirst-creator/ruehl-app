@@ -6,7 +6,9 @@ type AdminUserRow = {
   username: string | null;
   avatar_url: string | null;
   is_verified: boolean | null;
-  is_admin: boolean | null;
+  account_type: string | null;
+  account_category: string | null;
+  badge_verification_status: string | null;
   shadow_banned: boolean | null;
   suspended_until: string | null;
 };
@@ -19,6 +21,8 @@ export async function GET(request: Request) {
   const query = url.searchParams.get('query')?.trim().toLowerCase() || '';
   const page = Math.max(1, Number(url.searchParams.get('page') || '1'));
   const pageSize = Math.min(50, Math.max(1, Number(url.searchParams.get('pageSize') || '20')));
+  const accountTypeFilter = (url.searchParams.get('accountType') || 'all').trim().toLowerCase();
+  const badgeFilter = (url.searchParams.get('badgeVerification') || 'all').trim().toLowerCase();
 
   const [{ data: listedUsers, error: usersError }, { count: postsCount, error: postsError }] = await Promise.all([
     auth.admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
@@ -31,27 +35,38 @@ export async function GET(request: Request) {
   const authUsers = listedUsers?.users || [];
   const userIds = authUsers.map((user) => user.id);
 
-  const { data: profiles, error: profilesError } = userIds.length > 0
-    ? await auth.admin
-        .from('profiles')
-      .select('id, username, avatar_url, is_verified, is_admin, shadow_banned, suspended_until')
-        .in('id', userIds)
-    : { data: [] as AdminUserRow[], error: null };
+  const [{ data: profiles, error: profilesError }, { data: userRows, error: usersRowError }] =
+    userIds.length > 0
+      ? await Promise.all([
+          auth.admin
+            .from('profiles')
+            .select(
+              'id, username, avatar_url, is_verified, shadow_banned, suspended_until, account_type, account_category, badge_verification_status',
+            )
+            .in('id', userIds),
+          auth.admin.from('users').select('id, is_admin').in('id', userIds),
+        ])
+      : [{ data: [] as AdminUserRow[], error: null }, { data: [] as { id: string; is_admin: boolean | null }[], error: null }];
 
   if (profilesError) return jsonError(profilesError.message, 400);
+  if (usersRowError) return jsonError(usersRowError.message, 400);
 
   const profileMap = new Map((profiles || []).map((profile) => [profile.id, profile]));
+  const adminFlagMap = new Map((userRows || []).map((row) => [row.id, row.is_admin === true]));
 
-  const merged = authUsers.map((user) => {
+  let merged = authUsers.map((user) => {
     const profile = profileMap.get(user.id);
     return {
       id: user.id,
-      username: profile?.username || null,
+      username: profile?.username ?? null,
       email: user.email || null,
       phone: user.phone || null,
-      avatar_url: profile?.avatar_url || null,
+      avatar_url: profile?.avatar_url ?? null,
       is_verified: profile?.is_verified ?? false,
-      is_admin: profile?.is_admin ?? false,
+      account_type: profile?.account_type ?? null,
+      account_category: profile?.account_category ?? null,
+      badge_verification_status: profile?.badge_verification_status ?? null,
+      is_admin: adminFlagMap.get(user.id) ?? false,
       shadow_banned: profile?.shadow_banned ?? false,
       suspended_until: profile?.suspended_until ?? null,
       created_at: user.created_at || null,
@@ -59,7 +74,7 @@ export async function GET(request: Request) {
     };
   });
 
-  const filtered = query
+  const textFiltered = query
     ? merged.filter((user) => {
         const username = user.username?.toLowerCase() || '';
         const email = user.email?.toLowerCase() || '';
@@ -68,9 +83,26 @@ export async function GET(request: Request) {
       })
     : merged;
 
-  const total = filtered.length;
+  let typeFiltered = textFiltered;
+  if (accountTypeFilter !== 'all' && ['personal', 'business', 'media'].includes(accountTypeFilter)) {
+    typeFiltered = textFiltered.filter(
+      (u) => String(u.account_type || '').toLowerCase() === accountTypeFilter,
+    );
+  }
+
+  let badgeFiltered = typeFiltered;
+  if (badgeFilter !== 'all') {
+    if (badgeFilter === 'none') {
+      badgeFiltered = typeFiltered.filter((u) => !u.badge_verification_status);
+    } else if (['pending', 'approved', 'rejected'].includes(badgeFilter)) {
+      badgeFiltered = typeFiltered.filter((u) => String(u.badge_verification_status || '').toLowerCase() === badgeFilter);
+    }
+  }
+
+  const total = badgeFiltered.length;
   const start = (page - 1) * pageSize;
-  const items = filtered.slice(start, start + pageSize);
+  const items = badgeFiltered.slice(start, start + pageSize);
+
   const activeUsers = merged.filter((user) => {
     if (!user.last_sign_in_at) return false;
     const lastSeen = new Date(user.last_sign_in_at).getTime();

@@ -49,13 +49,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const userId = id?.trim();
   if (!userId) return jsonError('user id is required', 400);
 
-  const [userResult, profileResult, activityResult, postsResult, reportsResult, notesResult] = await Promise.all([
+  const [userResult, profileResult, platformUserResult, activityResult, postsResult, reportsResult, notesResult] =
+    await Promise.all([
     auth.admin.auth.admin.getUserById(userId),
     auth.admin
       .from('profiles')
-      .select('id, username, bio, avatar_url, is_verified, verified, is_admin, shadow_banned, suspended_until, created_at')
+      .select(
+        'id, username, bio, avatar_url, is_verified, verified, shadow_banned, suspended_until, created_at, account_type, account_category, badge_verification_status',
+      )
       .eq('id', userId)
       .maybeSingle(),
+    auth.admin.from('users').select('is_admin').eq('id', userId).maybeSingle(),
     auth.admin
       .from('user_activity')
       .select('id, user_id, target_id, type, created_at')
@@ -84,14 +88,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   if (userResult.error) return jsonError(userResult.error.message, 400);
   if (profileResult.error) return jsonError(profileResult.error.message, 400);
+  if (platformUserResult.error) return jsonError(platformUserResult.error.message, 400);
   if (activityResult.error && !isMissingRelationError(activityResult.error)) return jsonError(activityResult.error.message, 400);
   if (postsResult.error && !isMissingRelationError(postsResult.error)) return jsonError(postsResult.error.message, 400);
   if (reportsResult.error && !isMissingRelationError(reportsResult.error)) return jsonError(reportsResult.error.message, 400);
   if (notesResult.error && !isMissingRelationError(notesResult.error)) return jsonError(notesResult.error.message, 400);
 
+  const rawProfile = profileResult.data as Record<string, unknown> | null;
+  const mergedProfile = rawProfile
+    ? {
+        ...rawProfile,
+        is_admin: Boolean((platformUserResult.data as { is_admin?: boolean } | null)?.is_admin),
+      }
+    : null;
+
   return jsonOk({
     user: userResult.data?.user || null,
-    profile: profileResult.data || null,
+    profile: mergedProfile,
     activity: isMissingRelationError(activityResult.error) ? [] : activityResult.data || [],
     posts: isMissingRelationError(postsResult.error) ? [] : postsResult.data || [],
     reports: isMissingRelationError(reportsResult.error) ? [] : reportsResult.data || [],

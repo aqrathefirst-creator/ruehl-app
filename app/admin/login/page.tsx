@@ -25,15 +25,15 @@ export default function AdminLoginPage() {
 
       if (!active || !user) return;
 
-      const { data: profile } = await supabase
-        .from('admin_users')
-        .select('id')
-        .eq('id', user.id)
-        .maybeSingle();
+      const [{ data: adminInstitutional }, { data: platformRow }] = await Promise.all([
+        supabase.from('admin_users').select('id').eq('id', user.id).maybeSingle(),
+        supabase.from('users').select('is_admin').eq('id', user.id).maybeSingle(),
+      ]);
 
       if (!active) return;
 
-      if (profile?.id) {
+      const isPlatformAdmin = Boolean((platformRow as { is_admin?: boolean } | null)?.is_admin);
+      if (adminInstitutional?.id || isPlatformAdmin) {
         router.replace('/admin');
       }
     };
@@ -75,17 +75,17 @@ export default function AdminLoginPage() {
         throw new Error('Unable to verify session.');
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from('admin_users')
-        .select('id')
-        .eq('id', signedInUser.id)
-        .maybeSingle();
+      const [{ data: adminInstitutional, error: adminErr }, { data: platformRow, error: platformErr }] =
+        await Promise.all([
+          supabase.from('admin_users').select('id').eq('id', signedInUser.id).maybeSingle(),
+          supabase.from('users').select('is_admin').eq('id', signedInUser.id).maybeSingle(),
+        ]);
 
-      if (profileError) {
-        throw profileError;
-      }
+      if (adminErr) throw adminErr;
+      if (platformErr) throw platformErr;
 
-      if (!profile?.id) {
+      const isPlatformAdmin = Boolean((platformRow as { is_admin?: boolean } | null)?.is_admin);
+      if (!adminInstitutional?.id && !isPlatformAdmin) {
         await supabase.auth.signOut();
         setError('This account does not have admin access.');
         return;

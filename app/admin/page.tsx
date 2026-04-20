@@ -8,6 +8,11 @@ import AdminCard from '@/components/admin/AdminCard';
 import RequestModal from '@/components/admin/RequestModal';
 import type { AdminPermission, AdminRole } from '@/lib/adminRoles';
 import type { GovernedRequestSubject } from '@/lib/admin/executeRequest';
+import AccountTypeChip from '@/components/profile/AccountTypeChip';
+import VerificationBadge from '@/components/profile/VerificationBadge';
+import type { VerificationSubmission } from '@/lib/ruehl/verification';
+import type { AccountCategory, AccountType, BadgeVerificationStatus } from '@/lib/ruehl/accountTypes';
+import { ACCOUNT_TYPE_LABELS, getCategoryLabel, getTypeLabel } from '@/lib/ruehl/accountTypes';
 
 type SectionId =
   | 'dashboard'
@@ -244,6 +249,23 @@ type InlineOption<T extends string> = {
   label: string;
 };
 
+type VerificationQueueRow = VerificationSubmission & {
+  username: string | null;
+  profileBadgeVerificationStatus: string | null;
+};
+
+function parseAccountType(raw: unknown): AccountType | null {
+  const v = String(raw || '').toLowerCase();
+  if (v === 'personal' || v === 'business' || v === 'media') return v;
+  return null;
+}
+
+function parseBadgeStatus(raw: unknown): BadgeVerificationStatus {
+  const v = String(raw || '').toLowerCase();
+  if (v === 'pending' || v === 'approved' || v === 'rejected') return v;
+  return null;
+}
+
 function InlineSelect<T extends string>({
   value,
   options,
@@ -325,6 +347,10 @@ export default function AdminPage() {
   const [charts, setCharts] = useState<GenericItem>({});
   const [listData, setListData] = useState<GenericItem[]>([]);
   const [requests, setRequests] = useState<RequestsPayload | null>(null);
+
+  const [usersAccountTypeFilter, setUsersAccountTypeFilter] = useState<'all' | AccountType>('all');
+  const [usersBadgeFilter, setUsersBadgeFilter] = useState<'all' | 'none' | NonNullable<BadgeVerificationStatus>>('all');
+  const [rejectDraftById, setRejectDraftById] = useState<Record<string, string>>({});
 
   const [roleTargetId, setRoleTargetId] = useState('');
   const [roleValue, setRoleValue] = useState<AdminRole>('ANALYST');
@@ -426,8 +452,12 @@ export default function AdminPage() {
         const data = await withAdminFetch('/api/admin/intelligence/activity');
         setDashboard(data as GenericItem);
       } else {
+        const usersQs = new URLSearchParams({ page: '1', pageSize: '25' });
+        if (usersAccountTypeFilter !== 'all') usersQs.set('accountType', usersAccountTypeFilter);
+        if (usersBadgeFilter !== 'all') usersQs.set('badgeVerification', usersBadgeFilter);
+
         const endpointBySection: Record<string, string> = {
-          users: '/api/admin/users?page=1&pageSize=25',
+          users: `/api/admin/users?${usersQs.toString()}`,
           content: '/api/admin/content?filter=all&sort=recent&page=1&pageSize=25',
           moderation: '/api/admin/verification?status=pending',
           reports: '/api/admin/reports?status=all',
@@ -447,7 +477,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeSection, loadAccess, loadRequests]);
+  }, [activeSection, loadAccess, loadRequests, usersAccountTypeFilter, usersBadgeFilter]);
 
   useEffect(() => {
     let mounted = true;
@@ -464,14 +494,14 @@ export default function AdminPage() {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from('admin_users')
-        .select('id')
-        .eq('id', authUser.id)
-        .maybeSingle();
+      const [{ data: adminInstitutional }, { data: platformRow }] = await Promise.all([
+        supabase.from('admin_users').select('id').eq('id', authUser.id).maybeSingle(),
+        supabase.from('users').select('is_admin').eq('id', authUser.id).maybeSingle(),
+      ]);
       if (!mounted) return;
 
-      if (!profile?.id) {
+      const isPlatformAdmin = Boolean((platformRow as { is_admin?: boolean } | null)?.is_admin);
+      if (!adminInstitutional?.id && !isPlatformAdmin) {
         router.replace('/');
         return;
       }
@@ -673,7 +703,7 @@ export default function AdminPage() {
           {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>}
           {success && <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{success}</div>}
 
-          {loading ? (
+          {loading && !['users', 'moderation'].includes(activeSection) ? (
             <AdminCard title="Loading"><p className="text-sm text-gray-400">Loading…</p></AdminCard>
           ) : (
             <>
@@ -833,27 +863,306 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {['users', 'content', 'moderation', 'reports', 'music', 'genres', 'feed', 'support', 'system'].includes(activeSection) && (
-                <AdminCard title={section?.label || 'Section'} description="Structured data view. Any sensitive action must be submitted through Requests.">
-                  {activeSection === 'users' && (
-                    <div className="mb-4 flex flex-wrap gap-2">
-                      <button type="button" onClick={() => openRequestModal('VERIFY_USER')} className="rounded-lg border border-cyan-400/35 bg-cyan-500/20 px-3 py-1.5 text-xs text-cyan-200">Verify User (Request)</button>
-                      <button type="button" onClick={() => openRequestModal('SHADOW_BAN_USER')} className="rounded-lg border border-cyan-400/35 bg-cyan-500/20 px-3 py-1.5 text-xs text-cyan-200">Shadow Ban (Request)</button>
-                      <button type="button" onClick={() => openRequestModal('RESTRICT_USER')} className="rounded-lg border border-cyan-400/35 bg-cyan-500/20 px-3 py-1.5 text-xs text-cyan-200">Restrict User (Request)</button>
-                      <button type="button" onClick={() => openRequestModal('DELETE_USER')} className="rounded-lg border border-red-400/35 bg-red-500/20 px-3 py-1.5 text-xs text-red-200">Delete User (Request)</button>
+              {activeSection === 'users' && (
+                <AdminCard
+                  title="Users"
+                  description="Directory with account type, category, and verification. Sensitive actions still go through Requests."
+                >
+                  {loading && <p className="mb-2 text-xs text-gray-500">Updating list…</p>}
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                    <div className="min-w-[200px] flex-1">
+                      <p className="mb-1 text-xs text-gray-500">Account type</p>
+                      <InlineSelect<'all' | AccountType>
+                        value={usersAccountTypeFilter}
+                        options={[
+                          { value: 'all', label: 'All types' },
+                          { value: 'personal', label: ACCOUNT_TYPE_LABELS.personal },
+                          { value: 'business', label: ACCOUNT_TYPE_LABELS.business },
+                          { value: 'media', label: ACCOUNT_TYPE_LABELS.media },
+                        ]}
+                        onChange={setUsersAccountTypeFilter}
+                        ariaLabel="Filter by account type"
+                      />
+                    </div>
+                    <div className="min-w-[200px] flex-1">
+                      <p className="mb-1 text-xs text-gray-500">Verification status</p>
+                      <InlineSelect<'all' | 'none' | NonNullable<BadgeVerificationStatus>>
+                        value={usersBadgeFilter}
+                        options={[
+                          { value: 'all', label: 'All statuses' },
+                          { value: 'none', label: 'None' },
+                          { value: 'pending', label: 'Pending' },
+                          { value: 'approved', label: 'Approved' },
+                          { value: 'rejected', label: 'Rejected' },
+                        ]}
+                        onChange={setUsersBadgeFilter}
+                        ariaLabel="Filter by verification status"
+                      />
+                    </div>
+                  </div>
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openRequestModal('VERIFY_USER')}
+                      className="rounded-lg border border-cyan-400/35 bg-cyan-500/20 px-3 py-1.5 text-xs text-cyan-200"
+                    >
+                      Verify User (Request)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openRequestModal('SHADOW_BAN_USER')}
+                      className="rounded-lg border border-cyan-400/35 bg-cyan-500/20 px-3 py-1.5 text-xs text-cyan-200"
+                    >
+                      Shadow Ban (Request)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openRequestModal('RESTRICT_USER')}
+                      className="rounded-lg border border-cyan-400/35 bg-cyan-500/20 px-3 py-1.5 text-xs text-cyan-200"
+                    >
+                      Restrict User (Request)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openRequestModal('DELETE_USER')}
+                      className="rounded-lg border border-red-400/35 bg-red-500/20 px-3 py-1.5 text-xs text-red-200"
+                    >
+                      Delete User (Request)
+                    </button>
+                  </div>
+                  <div className="max-w-full overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-white/10 text-left text-gray-400">
+                          {['User', 'Email', 'Account type', 'Category', 'Verification', 'Admin', 'Created'].map((header) => (
+                            <th key={header} className="whitespace-nowrap px-3 py-2 font-medium">
+                              {header}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {listData.map((row) => {
+                          const r = row as GenericItem;
+                          const at = parseAccountType(r.account_type);
+                          const acRaw = r.account_category == null ? null : String(r.account_category);
+                          const ac = acRaw as AccountCategory | null;
+                          return (
+                            <tr key={String(r.id)} className="border-b border-white/5">
+                              <td className="whitespace-nowrap px-3 py-2 text-gray-200">{String(r.username || '—')}</td>
+                              <td className="max-w-[14rem] truncate px-3 py-2 text-gray-200">{String(r.email || '—')}</td>
+                              <td className="whitespace-nowrap px-3 py-2 text-gray-200">{at ? getTypeLabel(at) : '—'}</td>
+                              <td className="px-3 py-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {at && ac ? (
+                                    <>
+                                      <AccountTypeChip accountType={at} accountCategory={ac} displayCategoryLabel />
+                                      <span className="text-gray-300">{getCategoryLabel(ac)}</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-gray-500">—</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <VerificationBadge
+                                    status={parseBadgeStatus(r.badge_verification_status)}
+                                    legacyIsVerified={Boolean(r.is_verified)}
+                                    size="sm"
+                                  />
+                                  <span className="text-xs text-gray-500">
+                                    {r.badge_verification_status ? String(r.badge_verification_status) : 'none'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2 text-gray-200">{r.is_admin ? 'Yes' : '—'}</td>
+                              <td className="whitespace-nowrap px-3 py-2 text-xs text-gray-400">{String(r.created_at || '—')}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </AdminCard>
+              )}
+
+              {activeSection === 'moderation' && (
+                <AdminCard
+                  title={section?.label || 'Moderation'}
+                  description="Verification submissions (`verification_submissions`). Approve/reject updates review fields; badge sync is handled in the database."
+                >
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openRequestModal('RESTRICT_USER')}
+                      className="rounded-lg border border-cyan-400/35 bg-cyan-500/20 px-3 py-1.5 text-xs text-cyan-200"
+                    >
+                      Restrict Account (Request)
+                    </button>
+                  </div>
+                  {loading ? (
+                    <div className="space-y-2">
+                      {[0, 1, 2, 3, 4].map((key) => (
+                        <div key={key} className="h-14 animate-pulse rounded-lg bg-white/5" />
+                      ))}
+                    </div>
+                  ) : (listData as VerificationQueueRow[]).length === 0 ? (
+                    <p className="text-sm text-gray-400">No pending submissions</p>
+                  ) : (
+                    <div className="max-w-full overflow-x-auto">
+                      <table className="min-w-[56rem] text-sm">
+                        <thead>
+                          <tr className="border-b border-white/10 text-left text-gray-400">
+                            {['User', 'Type', 'Category', 'Legal name', 'Website', 'Submitted', 'Status', 'Actions'].map((header) => (
+                              <th key={header} className="whitespace-nowrap px-3 py-2 font-medium">
+                                {header}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(listData as VerificationQueueRow[]).map((sub) => {
+                            const at = sub.accountType;
+                            const ac = sub.accountCategory as AccountCategory;
+                            return (
+                              <tr key={sub.id} className="border-b border-white/5 align-top">
+                                <td className="px-3 py-2">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="font-medium text-gray-200">{sub.username ? `@${sub.username}` : sub.userId}</span>
+                                    <div className="flex items-center gap-2">
+                                      <VerificationBadge
+                                        status={parseBadgeStatus(sub.profileBadgeVerificationStatus)}
+                                        size="sm"
+                                      />
+                                      <span className="text-xs text-gray-500">
+                                        {sub.profileBadgeVerificationStatus || 'none'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2 text-gray-200">{getTypeLabel(at)}</td>
+                                <td className="px-3 py-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <AccountTypeChip accountType={at} accountCategory={ac} displayCategoryLabel />
+                                    <span className="text-gray-300">{getCategoryLabel(ac)}</span>
+                                  </div>
+                                </td>
+                                <td className="max-w-[12rem] px-3 py-2 text-gray-200">{sub.legalEntityName}</td>
+                                <td className="max-w-[10rem] truncate px-3 py-2">
+                                  {sub.websiteUrl ? (
+                                    <a
+                                      href={sub.websiteUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-cyan-300 underline"
+                                    >
+                                      {sub.websiteUrl}
+                                    </a>
+                                  ) : (
+                                    '—'
+                                  )}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-2 text-xs text-gray-400">{sub.submittedAt}</td>
+                                <td className="whitespace-nowrap px-3 py-2 text-xs uppercase text-gray-400">{sub.status}</td>
+                                <td className="px-3 py-2">
+                                  <div className="flex min-w-[12rem] flex-col gap-2">
+                                    <button
+                                      type="button"
+                                      className="rounded-md border border-white/15 bg-white/5 px-2 py-1 text-xs text-gray-200"
+                                      onClick={() =>
+                                        void (async () => {
+                                          try {
+                                            const doc = (await withAdminFetch(`/api/admin/verification/${sub.id}/document`)) as {
+                                              signedUrl?: string;
+                                            };
+                                            if (doc.signedUrl) window.open(doc.signedUrl, '_blank', 'noopener,noreferrer');
+                                          } catch (e: unknown) {
+                                            setError(e instanceof Error ? e.message : 'Could not open document');
+                                          }
+                                        })()
+                                      }
+                                    >
+                                      View document
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="rounded-md border border-emerald-400/35 bg-emerald-500/15 px-2 py-1 text-xs text-emerald-200"
+                                      onClick={() =>
+                                        void (async () => {
+                                          try {
+                                            await withAdminFetch(`/api/admin/verification/${sub.id}`, {
+                                              method: 'PATCH',
+                                              body: JSON.stringify({ status: 'approved' }),
+                                            });
+                                            setSuccess('Submission approved');
+                                            await loadSection();
+                                          } catch (e: unknown) {
+                                            setError(e instanceof Error ? e.message : 'Approve failed');
+                                          }
+                                        })()
+                                      }
+                                    >
+                                      Approve
+                                    </button>
+                                    <input
+                                      type="text"
+                                      placeholder="Rejection reason (required)"
+                                      value={rejectDraftById[sub.id] || ''}
+                                      onChange={(event) =>
+                                        setRejectDraftById((prev) => ({ ...prev, [sub.id]: event.target.value }))
+                                      }
+                                      className="w-full rounded-md border border-white/10 bg-black/40 px-2 py-1 text-xs text-gray-200"
+                                    />
+                                    <button
+                                      type="button"
+                                      className="rounded-md border border-red-400/35 bg-red-500/15 px-2 py-1 text-xs text-red-200"
+                                      onClick={() =>
+                                        void (async () => {
+                                          const reason = (rejectDraftById[sub.id] || '').trim();
+                                          if (!reason) {
+                                            setError('Rejection reason is required');
+                                            return;
+                                          }
+                                          try {
+                                            await withAdminFetch(`/api/admin/verification/${sub.id}`, {
+                                              method: 'PATCH',
+                                              body: JSON.stringify({ status: 'rejected', rejection_reason: reason }),
+                                            });
+                                            setRejectDraftById((prev) => {
+                                              const next = { ...prev };
+                                              delete next[sub.id];
+                                              return next;
+                                            });
+                                            setSuccess('Submission rejected');
+                                            await loadSection();
+                                          } catch (e: unknown) {
+                                            setError(e instanceof Error ? e.message : 'Reject failed');
+                                          }
+                                        })()
+                                      }
+                                    >
+                                      Reject
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   )}
+                </AdminCard>
+              )}
+
+              {['content', 'reports', 'music', 'genres', 'feed', 'support', 'system'].includes(activeSection) && (
+                <AdminCard title={section?.label || 'Section'} description="Structured data view. Any sensitive action must be submitted through Requests.">
                   {activeSection === 'content' && (
                     <div className="mb-4 flex flex-wrap gap-2">
                       <button type="button" onClick={() => openRequestModal('DELETE_CONTENT')} className="rounded-lg border border-red-400/35 bg-red-500/20 px-3 py-1.5 text-xs text-red-200">Delete Content (Request)</button>
                       <button type="button" onClick={() => openRequestModal('REMOVE_DISCOVERY')} className="rounded-lg border border-cyan-400/35 bg-cyan-500/20 px-3 py-1.5 text-xs text-cyan-200">Remove Discovery (Request)</button>
                       <button type="button" onClick={() => openRequestModal('BOOST_PROMOTE_CONTENT')} className="rounded-lg border border-cyan-400/35 bg-cyan-500/20 px-3 py-1.5 text-xs text-cyan-200">Boost/Promote (Request)</button>
-                    </div>
-                  )}
-                  {activeSection === 'moderation' && (
-                    <div className="mb-4 flex flex-wrap gap-2">
-                      <button type="button" onClick={() => openRequestModal('VERIFY_USER')} className="rounded-lg border border-cyan-400/35 bg-cyan-500/20 px-3 py-1.5 text-xs text-cyan-200">Approve Verification (Request)</button>
-                      <button type="button" onClick={() => openRequestModal('RESTRICT_USER')} className="rounded-lg border border-cyan-400/35 bg-cyan-500/20 px-3 py-1.5 text-xs text-cyan-200">Restrict Account (Request)</button>
                     </div>
                   )}
                   {activeSection === 'feed' && (
