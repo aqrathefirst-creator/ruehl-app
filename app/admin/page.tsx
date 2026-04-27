@@ -658,6 +658,60 @@ export default function AdminPage() {
     }
   };
 
+  const sendPasswordReset = async (userId: string, email: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !normalizedEmail.includes('@')) {
+      setError('Target user has no email for password reset');
+      return;
+    }
+
+    const confirmed = window.confirm(`Send password reset email to ${normalizedEmail}?`);
+    if (!confirmed) return;
+
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('Missing auth session');
+
+      const response = await fetch('/api/admin/reset', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          email: normalizedEmail,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        email?: string;
+        retry_after_seconds?: number;
+        retryAfterSeconds?: number;
+      };
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          const retryAfter =
+            Number(payload.retry_after_seconds || payload.retryAfterSeconds || 0) ||
+            Number(response.headers.get('retry-after') || 0);
+          const retrySuffix = retryAfter > 0 ? ` in ${retryAfter} seconds` : '';
+          throw new Error(`Rate limited — try again${retrySuffix}`);
+        }
+        throw new Error(payload.error || 'Request failed');
+      }
+
+      setSuccess(`Password reset email sent to ${payload.email || normalizedEmail}`);
+    } catch (resetError: unknown) {
+      setError(resetError instanceof Error ? resetError.message : 'Request failed');
+    }
+  };
+
   if (checking) return <div className="min-h-screen bg-black" />;
 
   const section = SECTIONS.find((item) => item.id === activeSection);
@@ -934,7 +988,7 @@ export default function AdminPage() {
                     <table className="min-w-full text-sm">
                       <thead>
                         <tr className="border-b border-white/10 text-left text-gray-400">
-                          {['User', 'Email', 'Account type', 'Category', 'Verification', 'Admin', 'Created'].map((header) => (
+                          {['User', 'Email', 'Account type', 'Category', 'Verification', 'Admin', 'Created', 'Actions'].map((header) => (
                             <th key={header} className="whitespace-nowrap px-3 py-2 font-medium">
                               {header}
                             </th>
@@ -978,6 +1032,16 @@ export default function AdminPage() {
                               </td>
                               <td className="whitespace-nowrap px-3 py-2 text-gray-200">{r.is_admin ? 'Yes' : '—'}</td>
                               <td className="whitespace-nowrap px-3 py-2 text-xs text-gray-400">{String(r.created_at || '—')}</td>
+                              <td className="whitespace-nowrap px-3 py-2">
+                                <button
+                                  type="button"
+                                  className="rounded-md border border-white/15 bg-white/5 px-2 py-1 text-xs text-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                  disabled={!r.email || !r.id}
+                                  onClick={() => void sendPasswordReset(String(r.id || ''), String(r.email || ''))}
+                                >
+                                  Reset Password
+                                </button>
+                              </td>
                             </tr>
                           );
                         })}
