@@ -55,11 +55,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     auth.admin
       .from('profiles')
       .select(
-        'id, username, bio, avatar_url, is_verified, verified, shadow_banned, suspended_until, created_at, account_type, account_category, badge_verification_status',
+        'id, username, bio, avatar_url, is_verified, verified, shadow_banned, suspended_until, created_at, account_category, badge_verification_status',
       )
       .eq('id', userId)
       .maybeSingle(),
-    auth.admin.from('users').select('is_admin').eq('id', userId).maybeSingle(),
+    auth.admin.from('users').select('is_admin, account_type').eq('id', userId).maybeSingle(),
     auth.admin
       .from('user_activity')
       .select('id, user_id, target_id, type, created_at')
@@ -95,10 +95,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (notesResult.error && !isMissingRelationError(notesResult.error)) return jsonError(notesResult.error.message, 400);
 
   const rawProfile = profileResult.data as Record<string, unknown> | null;
+  const platformUser = platformUserResult.data as { is_admin?: boolean | null; account_type?: string | null } | null;
   const mergedProfile = rawProfile
     ? {
         ...rawProfile,
-        is_admin: Boolean((platformUserResult.data as { is_admin?: boolean } | null)?.is_admin),
+        account_type: platformUser?.account_type ?? null,
+        is_admin: Boolean(platformUser?.is_admin),
       }
     : null;
 

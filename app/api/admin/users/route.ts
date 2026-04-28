@@ -1,16 +1,21 @@
 import { requireAdmin } from '@/lib/server/admin';
 import { jsonError, jsonOk } from '@/lib/server/responses';
 
-type AdminUserRow = {
+type ProfileListRow = {
   id: string;
   username: string | null;
   avatar_url: string | null;
   is_verified: boolean | null;
-  account_type: string | null;
   account_category: string | null;
   badge_verification_status: string | null;
   shadow_banned: boolean | null;
   suspended_until: string | null;
+};
+
+type UsersListRow = {
+  id: string;
+  is_admin: boolean | null;
+  account_type: string | null;
 };
 
 export async function GET(request: Request) {
@@ -41,21 +46,22 @@ export async function GET(request: Request) {
           auth.admin
             .from('profiles')
             .select(
-              'id, username, avatar_url, is_verified, shadow_banned, suspended_until, account_type, account_category, badge_verification_status',
+              'id, username, avatar_url, is_verified, shadow_banned, suspended_until, account_category, badge_verification_status',
             )
             .in('id', userIds),
-          auth.admin.from('users').select('id, is_admin').in('id', userIds),
+          auth.admin.from('users').select('id, is_admin, account_type').in('id', userIds),
         ])
-      : [{ data: [] as AdminUserRow[], error: null }, { data: [] as { id: string; is_admin: boolean | null }[], error: null }];
+      : [{ data: [] as ProfileListRow[], error: null }, { data: [] as UsersListRow[], error: null }];
 
   if (profilesError) return jsonError(profilesError.message, 400);
   if (usersRowError) return jsonError(usersRowError.message, 400);
 
   const profileMap = new Map((profiles || []).map((profile) => [profile.id, profile]));
-  const adminFlagMap = new Map((userRows || []).map((row) => [row.id, row.is_admin === true]));
+  const usersById = new Map((userRows || []).map((row) => [row.id, row]));
 
   let merged = authUsers.map((user) => {
     const profile = profileMap.get(user.id);
+    const platformUser = usersById.get(user.id);
     return {
       id: user.id,
       username: profile?.username ?? null,
@@ -63,10 +69,10 @@ export async function GET(request: Request) {
       phone: user.phone || null,
       avatar_url: profile?.avatar_url ?? null,
       is_verified: profile?.is_verified ?? false,
-      account_type: profile?.account_type ?? null,
+      account_type: platformUser?.account_type ?? null,
       account_category: profile?.account_category ?? null,
       badge_verification_status: profile?.badge_verification_status ?? null,
-      is_admin: adminFlagMap.get(user.id) ?? false,
+      is_admin: platformUser?.is_admin === true,
       shadow_banned: profile?.shadow_banned ?? false,
       suspended_until: profile?.suspended_until ?? null,
       created_at: user.created_at || null,
