@@ -6,7 +6,6 @@ type ProfileListRow = {
   username: string | null;
   avatar_url: string | null;
   is_verified: boolean | null;
-  account_category: string | null;
   badge_verification_status: string | null;
   shadow_banned: boolean | null;
   suspended_until: string | null;
@@ -46,7 +45,7 @@ export async function GET(request: Request) {
           auth.admin
             .from('profiles')
             .select(
-              'id, username, avatar_url, is_verified, shadow_banned, suspended_until, account_category, badge_verification_status',
+              'id, username, avatar_url, is_verified, shadow_banned, suspended_until, badge_verification_status',
             )
             .in('id', userIds),
           auth.admin.from('users').select('id, is_admin, account_type').in('id', userIds),
@@ -70,7 +69,6 @@ export async function GET(request: Request) {
       avatar_url: profile?.avatar_url ?? null,
       is_verified: profile?.is_verified ?? false,
       account_type: platformUser?.account_type ?? null,
-      account_category: profile?.account_category ?? null,
       badge_verification_status: profile?.badge_verification_status ?? null,
       is_admin: platformUser?.is_admin === true,
       shadow_banned: profile?.shadow_banned ?? false,

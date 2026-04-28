@@ -55,7 +55,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     auth.admin
       .from('profiles')
       .select(
-        'id, username, bio, avatar_url, is_verified, verified, shadow_banned, suspended_until, created_at, account_category, badge_verification_status',
+        'id, username, bio, avatar_url, is_verified, verified, shadow_banned, suspended_until, created_at, badge_verification_status',
       )
       .eq('id', userId)
       .maybeSingle(),
