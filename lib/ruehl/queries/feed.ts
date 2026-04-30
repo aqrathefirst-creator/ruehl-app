@@ -25,7 +25,9 @@ function logFeedError(context: string, err: unknown) {
 }
 
 const PROFILE_RAIL_SELECT =
-  'id, username, avatar_url, bio, identity_text, account_type, account_category, badge_verification_status, is_verified, verified, created_at';
+  'id, username, avatar_url, bio, identity_text, badge_verification_status, is_verified, verified, created_at';
+
+const USERS_RAIL_ACCOUNT_SELECT = 'id, account_type, account_subtype, account_category';
 
 const ALL_CAT: AccountCategory[] = [
   'personal',
@@ -43,13 +45,15 @@ const ALL_CAT: AccountCategory[] = [
 ];
 
 function parseAccountType(raw: string | null): AccountType | null {
-  if (raw === 'personal' || raw === 'business' || raw === 'media') return raw;
+  const s = String(raw || '').trim().toLowerCase();
+  if (s === 'personal' || s === 'business' || s === 'media') return s;
   return null;
 }
 
 function parseAccountCategory(raw: string | null): AccountCategory | null {
   if (!raw) return null;
-  return ALL_CAT.includes(raw as AccountCategory) ? (raw as AccountCategory) : null;
+  const s = String(raw).trim().toLowerCase();
+  return ALL_CAT.includes(s as AccountCategory) ? (s as AccountCategory) : null;
 }
 
 function parseBadgeVerification(raw: string | null): BadgeVerificationStatus {
@@ -365,13 +369,42 @@ export async function getSuggestedProfiles(currentUserId: string | null, lim: nu
 
     if (sortedIds.length === 0) return [];
 
-    const { data: profRows, error } = await supabase.from('profiles').select(PROFILE_RAIL_SELECT).in('id', sortedIds);
+    const [{ data: profRows, error }, { data: userRows, error: userErr }] = await Promise.all([
+      supabase.from('profiles').select(PROFILE_RAIL_SELECT).in('id', sortedIds),
+      supabase.from('users').select(USERS_RAIL_ACCOUNT_SELECT).in('id', sortedIds),
+    ]);
     if (error) {
       logFeedError('getSuggestedProfiles profiles', error);
       return [];
     }
+    if (userErr) {
+      logFeedError('getSuggestedProfiles users', userErr);
+    }
 
-    const byId = new Map((profRows || []).map((r) => [String((r as { id: string }).id), mapProfileRow(r as Record<string, unknown>)]));
+    const uById = new Map(
+      (userRows || []).map((r) => {
+        const row = r as Record<string, unknown>;
+        return [String(row.id ?? ''), row];
+      }),
+    );
+    const byId = new Map(
+      (profRows || []).map((r) => {
+        const pr = r as Record<string, unknown>;
+        const id = String(pr.id ?? '');
+        const u = uById.get(id);
+        const merged = {
+          ...pr,
+          ...(u
+            ? {
+                account_type: u.account_type,
+                account_subtype: u.account_subtype,
+                account_category: u.account_category,
+              }
+            : {}),
+        };
+        return [id, mapProfileRow(merged)];
+      }),
+    );
     return sortedIds.map((id) => byId.get(id)).filter((p): p is RuehlProfile => Boolean(p));
   } catch (e) {
     logFeedError('getSuggestedProfiles', e);

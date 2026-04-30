@@ -27,13 +27,9 @@ export async function getProfileByUsername(username: string): Promise<RuehlProfi
   const base = await getProfile(raw, supabase);
   if (!base?.id) return null;
 
-  const { data: privRow } = await supabase
-    .from('profiles')
-    .select('is_private_account')
-    .eq('id', base.id)
-    .maybeSingle();
+  const { data: privRow } = await supabase.from('users').select('is_private').eq('id', base.id).maybeSingle();
 
-  const isPrivateAccount = Boolean((privRow as { is_private_account?: boolean } | null)?.is_private_account);
+  const isPrivateAccount = Boolean((privRow as { is_private?: boolean } | null)?.is_private);
 
   return { ...base, isPrivateAccount };
 }
@@ -95,12 +91,8 @@ export async function getProfileStatsRow(profileId: string): Promise<ProfileStat
 
 export async function getCanViewPrivateTabs(profileId: string, viewerId: string | null): Promise<boolean> {
   const supabase = await createServerSupabase();
-  const { data: row } = await supabase
-    .from('profiles')
-    .select('is_private_account')
-    .eq('id', profileId)
-    .maybeSingle();
-  const isPrivate = Boolean((row as { is_private_account?: boolean } | null)?.is_private_account);
+  const { data: row } = await supabase.from('users').select('is_private').eq('id', profileId).maybeSingle();
+  const isPrivate = Boolean((row as { is_private?: boolean } | null)?.is_private);
   if (!isPrivate) return true;
   if (!viewerId) return false;
   if (viewerId === profileId) return true;

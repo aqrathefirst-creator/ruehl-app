@@ -11,7 +11,9 @@ import FeedCard from '@/components/feed/FeedCard';
 const PAGE = 15;
 
 const PROFILE_SELECT =
-  'id, username, avatar_url, bio, identity_text, account_type, account_category, badge_verification_status, is_verified, verified, created_at';
+  'id, username, avatar_url, bio, identity_text, badge_verification_status, is_verified, verified, created_at';
+
+const USERS_ACCOUNT_SELECT = 'id, account_type, account_subtype, account_category';
 
 function isVideoUrl(url: string) {
   const clean = url.split('?')[0]?.toLowerCase() || '';
@@ -35,10 +37,10 @@ function mapProfile(r: Record<string, unknown>): RuehlProfile {
     avatar_url: r.avatar_url == null ? null : String(r.avatar_url),
     bio: r.bio == null ? null : String(r.bio),
     identity_text: r.identity_text == null ? null : String(r.identity_text),
-    account_type:
-      r.account_type === 'personal' || r.account_type === 'business' || r.account_type === 'media'
-        ? r.account_type
-        : null,
+    account_type: (() => {
+      const t = String(r.account_type || '').trim().toLowerCase();
+      return t === 'personal' || t === 'business' || t === 'media' ? t : null;
+    })(),
     account_category:
       r.account_category == null ? null : (String(r.account_category) as AccountCategory),
     badge_verification_status: badge,
@@ -75,11 +77,32 @@ export default function FeedList() {
   const loadProfiles = useCallback(async (postsBatch: RuehlPost[]) => {
     const ids = [...new Set(postsBatch.map((p) => p.user_id).filter(Boolean))];
     if (ids.length === 0) return;
-    const { data } = await supabase.from('profiles').select(PROFILE_SELECT).in('id', ids);
+    const [{ data: profs }, { data: users }] = await Promise.all([
+      supabase.from('profiles').select(PROFILE_SELECT).in('id', ids),
+      supabase.from('users').select(USERS_ACCOUNT_SELECT).in('id', ids),
+    ]);
+    const uById = new Map(
+      (users || []).map((r) => {
+        const u = r as Record<string, unknown>;
+        return [String(u.id ?? ''), u];
+      }),
+    );
     const next: Record<string, RuehlProfile> = {};
-    for (const row of data || []) {
-      const id = String((row as { id: string }).id);
-      next[id] = mapProfile(row as Record<string, unknown>);
+    for (const row of profs || []) {
+      const pr = row as Record<string, unknown>;
+      const id = String(pr.id ?? '');
+      const u = uById.get(id);
+      const merged = {
+        ...pr,
+        ...(u
+          ? {
+              account_type: u.account_type,
+              account_subtype: u.account_subtype,
+              account_category: u.account_category,
+            }
+          : {}),
+      };
+      next[id] = mapProfile(merged);
     }
     setProfilesById((prev) => ({ ...prev, ...next }));
   }, []);
