@@ -1,31 +1,50 @@
 import { requireAdmin } from '@/lib/server/admin';
 import { jsonError, jsonOk } from '@/lib/server/responses';
 
+/** Legacy UI actions → DB `report_action` enum (`apply_report_action`). */
 type ReportAction = 'dismiss' | 'warn_user' | 'remove_content' | 'suspend_user';
 
+const TARGET_TYPES = new Set(['post', 'drop', 'comment', 'message', 'user']);
+
+function mapActionToRpc(action: ReportAction): {
+  p_action: 'none' | 'user_warned' | 'content_hidden' | 'user_suspended';
+  p_resolution_status: 'dismissed' | 'resolved_action_taken';
+} {
+  switch (action) {
+    case 'dismiss':
+      return { p_action: 'none', p_resolution_status: 'dismissed' };
+    case 'warn_user':
+      return { p_action: 'user_warned', p_resolution_status: 'resolved_action_taken' };
+    case 'remove_content':
+      return { p_action: 'content_hidden', p_resolution_status: 'resolved_action_taken' };
+    case 'suspend_user':
+      return { p_action: 'user_suspended', p_resolution_status: 'resolved_action_taken' };
+  }
+}
+
+/**
+ * GET: `list_admin_reports(p_filter_type, p_limit)` — returns only rows with status ∈ (open, in_review).
+ * Query `status=all` does not expand history; resolved reports are not exposed by this RPC.
+ */
 export async function GET(request: Request) {
   const auth = await requireAdmin(request.headers.get('authorization'));
   if (!auth.ok) return jsonError(auth.error, auth.status);
 
   const url = new URL(request.url);
-  const status = (url.searchParams.get('status') || 'pending').trim();
+  const targetType = (url.searchParams.get('target_type') || '').trim().toLowerCase();
+  const p_filter_type =
+    targetType && TARGET_TYPES.has(targetType)
+      ? (targetType as 'post' | 'drop' | 'comment' | 'message' | 'user')
+      : null;
 
-  let query = auth.admin
-    .from('user_reports')
-    .select(
-      'id, reporter_id, target_user_id, target_post_id, reason, created_at, admin_status, admin_action, admin_note, resolved_at, resolved_by'
-    )
-    .order('created_at', { ascending: false })
-    .limit(200);
+  const { data, error } = await auth.supabase.rpc('list_admin_reports', {
+    p_filter_type,
+    p_limit: 200,
+  });
 
-  if (status !== 'all') {
-    query = query.eq('admin_status', status);
-  }
-
-  const { data, error } = await query;
   if (error) return jsonError(error.message, 400);
 
-  return jsonOk({ items: data || [] });
+  return jsonOk({ items: data ?? [] });
 }
 
 export async function PATCH(request: Request) {
@@ -45,49 +64,16 @@ export async function PATCH(request: Request) {
   if (!reportId) return jsonError('report_id is required', 400);
   if (!action) return jsonError('action is required', 400);
 
-  const { data: report, error: reportError } = await auth.admin
-    .from('user_reports')
-    .select('id, target_user_id, target_post_id')
-    .eq('id', reportId)
-    .single();
+  const { p_action, p_resolution_status } = mapActionToRpc(action);
 
-  if (reportError) return jsonError(reportError.message, 400);
+  const { data, error } = await auth.supabase.rpc('apply_report_action', {
+    p_report_id: reportId,
+    p_action,
+    p_resolution_status,
+  });
 
-  let adminStatus = 'resolved';
-  if (action === 'dismiss') adminStatus = 'dismissed';
-
-  if (action === 'remove_content' && report.target_post_id) {
-    const updatePost = await auth.admin
-      .from('posts')
-      .update({ hidden_by_admin: true, visibility_state: 'hidden', moderation_state: 'flagged' })
-      .eq('id', report.target_post_id);
-
-    if (updatePost.error) return jsonError(updatePost.error.message, 400);
-  }
-
-  if (action === 'suspend_user' && report.target_user_id) {
-    const days = Math.max(1, Number(body?.suspend_days || 7));
-    const suspendedUntil = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-    const suspendResult = await auth.admin
-      .from('profiles')
-      .update({ suspended_until: suspendedUntil })
-      .eq('id', report.target_user_id);
-
-    if (suspendResult.error) return jsonError(suspendResult.error.message, 400);
-  }
-
-  const { error: updateError } = await auth.admin
-    .from('user_reports')
-    .update({
-      admin_status: adminStatus,
-      admin_action: action,
-      admin_note: body?.note?.trim() || null,
-      resolved_at: new Date().toISOString(),
-      resolved_by: auth.user.id,
-    })
-    .eq('id', reportId);
-
-  if (updateError) return jsonError(updateError.message, 400);
+  if (error) return jsonError(error.message, 400);
+  if (data === false) return jsonError('Action failed', 400);
 
   return jsonOk({ success: true });
 }

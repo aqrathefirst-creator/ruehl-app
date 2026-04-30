@@ -82,8 +82,24 @@ export default function RequestModal({
 
     if (upload.error) throw new Error(upload.error.message || 'Attachment upload failed');
 
-    const { data } = supabase.storage.from('admin-request-attachments').getPublicUrl(path);
-    return data.publicUrl;
+    const accessToken = session?.access_token;
+    if (!accessToken) throw new Error('Missing auth session');
+
+    const signed = await fetch('/api/storage/signed-url', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ bucket: 'admin-request-attachments', path }),
+    });
+
+    const payload = (await signed.json().catch(() => null)) as { url?: string; error?: string } | null;
+    if (!signed.ok || !payload?.url) {
+      throw new Error(payload?.error || 'Unable to sign attachment URL');
+    }
+
+    return payload.url;
   };
 
   const handleSubmit = async () => {

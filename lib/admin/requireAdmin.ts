@@ -1,6 +1,11 @@
 import type { User } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import type { AdminRole } from '@/lib/adminRoles';
 import { createServiceRoleSupabase, requireUser } from '@/lib/server/supabase';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
 
 export type AdminProfile = {
   id: string;
@@ -63,6 +68,44 @@ function syntheticPlatformAdminProfile(user: User): AdminProfile {
     is_root_admin: true,
     created_at: new Date(0).toISOString(),
   };
+}
+
+/**
+ * App Router layouts and other server components without a Request: read session from cookies
+ * and reuse the same admin checks as API routes.
+ */
+export async function requireAdminFromCookies() {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // Called from a Server Component — cookie mutation may be disabled
+        }
+      },
+    },
+  });
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    return {
+      ok: false,
+      error: 'Unauthorized',
+      status: 401,
+    } satisfies AdminFailure;
+  }
+
+  return requireAdmin(`Bearer ${session.access_token}`);
 }
 
 export async function requireAdmin(authHeader: string | null) {
