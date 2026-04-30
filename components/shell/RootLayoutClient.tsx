@@ -8,7 +8,13 @@ import { ClientShellProviders } from '@/components/shell/ClientShellProviders';
 import { supabase } from '@/lib/supabase';
 import { hasActiveCreateUpload } from '@/lib/createUploadQueue';
 
-const PUBLIC_PATHS = new Set(['/login', '/admin/login', '/reset-password', '/verify-account']);
+/** Auth-only pages (no app shell). Marketing home `/` is anonymous-OK but uses shell when signed in. */
+const STRICT_PUBLIC = new Set(['/login', '/admin/login', '/reset-password', '/verify-account']);
+
+function allowsAnonymousVisit(path: string | null): boolean {
+  const p = path || '';
+  return p === '/' || STRICT_PUBLIC.has(p);
+}
 
 export default function RootLayoutClient({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -18,9 +24,7 @@ export default function RootLayoutClient({ children }: { children: React.ReactNo
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
 
-  const isPublicPage = PUBLIC_PATHS.has(pathname || '');
   const isCreateRoute = (pathname || '').startsWith('/create');
-  const isUsernameOnboardingRoute = (pathname || '').startsWith('/onboarding/username');
 
   useEffect(() => {
     let mounted = true;
@@ -39,7 +43,7 @@ export default function RootLayoutClient({ children }: { children: React.ReactNo
         setIsVerified(false);
         setAuthChecked(true);
 
-        if (!isPublicPage) {
+        if (!allowsAnonymousVisit(pathname || null)) {
           if ((pathname || '').startsWith('/admin')) {
             router.replace('/admin/login');
           } else {
@@ -58,25 +62,12 @@ export default function RootLayoutClient({ children }: { children: React.ReactNo
       if (!mounted) return;
 
       const verified = error ? true : profileData?.is_verified !== false;
-      const username = (profileData?.username || '').trim();
       setIsVerified(verified);
       setAuthChecked(true);
 
       if (!verified && pathname !== '/verify-account' && !(pathname || '').startsWith('/admin')) {
         router.replace('/verify-account');
         return;
-      }
-
-      if (verified && !(pathname || '').startsWith('/admin')) {
-        if (!username && !isUsernameOnboardingRoute && pathname !== '/verify-account') {
-          router.replace('/onboarding/username');
-          return;
-        }
-
-        if (username && isUsernameOnboardingRoute) {
-          router.replace(`/${username}`);
-          return;
-        }
       }
 
       if (verified && pathname === '/verify-account') {
@@ -99,7 +90,7 @@ export default function RootLayoutClient({ children }: { children: React.ReactNo
 
       if (!authed) {
         setIsVerified(false);
-        if (!PUBLIC_PATHS.has(pathname || '')) {
+        if (!allowsAnonymousVisit(pathname || null)) {
           if ((pathname || '').startsWith('/admin')) {
             router.replace('/admin/login');
           } else {
@@ -116,7 +107,7 @@ export default function RootLayoutClient({ children }: { children: React.ReactNo
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [isPublicPage, pathname, router, isUsernameOnboardingRoute]);
+  }, [pathname, router]);
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -130,11 +121,7 @@ export default function RootLayoutClient({ children }: { children: React.ReactNo
   }, []);
 
   const showShell =
-    isAuthenticated &&
-    isVerified &&
-    !isPublicPage &&
-    !isCreateRoute &&
-    !isUsernameOnboardingRoute;
+    isAuthenticated && isVerified && !STRICT_PUBLIC.has(pathname || '') && !isCreateRoute;
 
   return (
     <>

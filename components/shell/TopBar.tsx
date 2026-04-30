@@ -2,15 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  Calendar,
-  Compass,
-  Home,
-  MessageCircle,
-  Settings,
-  Shield,
-  Zap,
-} from 'lucide-react';
+import { Home, Settings, Shield } from 'lucide-react';
 
 export type NavItemDef = {
   href: string;
@@ -21,10 +13,6 @@ export type NavItemDef = {
 
 export const TOP_BAR_NAV_ITEMS: NavItemDef[] = [
   { label: 'Home', href: '/', icon: Home, match: (pathname) => pathname === '/' },
-  { label: 'Now', href: '/now', icon: Zap, match: (pathname) => pathname === '/now' || pathname.startsWith('/now/') },
-  { label: 'Sessions', href: '/sessions', icon: Calendar, match: (pathname) => pathname.startsWith('/sessions') },
-  { label: 'Search', href: '/explore', icon: Compass, match: (pathname) => pathname.startsWith('/explore') },
-  { label: 'Messages', href: '/messages', icon: MessageCircle, match: (pathname) => pathname.startsWith('/messages') },
 ];
 
 type Props = {

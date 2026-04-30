@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, Flame, Calendar, Plus, ChartColumn } from 'lucide-react';
+import { Home, Plus, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
@@ -73,7 +73,7 @@ export default function BottomNav() {
       }
     };
 
-    loadUser();
+    void loadUser();
 
     return () => {
       window.removeEventListener('ruehl:avatar-updated', handleAvatarUpdated as EventListener);
@@ -84,8 +84,8 @@ export default function BottomNav() {
   useEffect(() => subscribeToCreateUpload(setUploadSnapshot), []);
 
   useEffect(() => {
-    router.prefetch('/now');
-    router.prefetch('/notifications');
+    void router.prefetch('/');
+    void router.prefetch('/settings');
 
     if (typeof window === 'undefined' || !navigator.permissions?.query) return;
 
@@ -108,15 +108,9 @@ export default function BottomNav() {
       .catch(() => undefined);
   }, [router]);
 
-  // 🔥 UPDATED TABS (Train removed, Now moved)
-  const tabs = [
-    { name: 'Home', path: '/', icon: Home },
-    { name: 'Now', path: '/now', icon: Flame },
-    { name: 'Charts', path: '/charts', icon: ChartColumn },
-    { name: 'Sessions', path: '/sessions', icon: Calendar },
-  ];
-
   const isProfileActive = pathname?.startsWith('/profile');
+  const isHomeActive = pathname === '/';
+  const isSettingsActive = pathname?.startsWith('/settings');
 
   if (isAdminRoute) {
     return null;
@@ -129,7 +123,7 @@ export default function BottomNav() {
           type="button"
           onClick={() => {
             if (uploadSnapshot.error) clearCreateUploadState();
-            else router.push('/now');
+            else router.push('/');
           }}
           className="fixed bottom-24 left-1/2 z-50 w-[92%] max-w-[430px] -translate-x-1/2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)] px-4 py-3 text-left shadow-2xl backdrop-blur-md md:hidden"
         >
@@ -158,121 +152,90 @@ export default function BottomNav() {
         </button>
       )}
 
-      <div
-        className="fixed bottom-4 left-1/2 z-50 flex h-[72px] w-[92%] max-w-[430px] -translate-x-1/2 items-center justify-between rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)] px-6 shadow-2xl backdrop-blur-md md:hidden"
-      >
-
-      {/* LEFT SIDE */}
-      <div className="flex items-center gap-8">
-        {tabs.slice(0, 2).map(tab => {
-          const Icon = tab.icon;
-          const active = pathname === tab.path;
-
-          return (
-            <button
-              key={tab.name}
-              onClick={() => router.push(tab.path)}
-              className="flex flex-col items-center gap-1 relative transition active:scale-90"
-            >
-              <Icon
-                size={24}
-                className={active ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'}
-                strokeWidth={active ? 2.5 : 1.8}
-              />
-
-              <span
-                className={`text-[11px] ${
-                  active ? 'font-semibold text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'
-                }`}
-              >
-                {tab.name}
-              </span>
-
-              {active && (
-                <div className="absolute -bottom-1 h-1 w-1 rounded-full bg-[var(--accent-violet-bright)]" />
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* CENTER POST BUTTON */}
-      <button
-        type="button"
-        onClick={() => {
-          toast('Posting is in the Ruehl app. Get it from the App Store.');
-          router.replace('/');
-        }}
-        className="relative -mt-8 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-violet)] shadow-lg transition active:scale-90"
-      >
-        <Plus size={26} className="text-[var(--text-primary)]" />
-      </button>
-
-      {/* RIGHT SIDE */}
-      <div className="flex items-center gap-8">
-        {tabs.slice(2).map(tab => {
-          const Icon = tab.icon;
-          const active = pathname === tab.path;
-
-          return (
-            <button
-              key={tab.name}
-              onClick={() => router.push(tab.path)}
-              className="flex flex-col items-center gap-1 relative transition active:scale-90"
-            >
-              <Icon
-                size={24}
-                className={active ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'}
-                strokeWidth={active ? 2.5 : 1.8}
-              />
-
-              <span
-                className={`text-[11px] ${
-                  active ? 'font-semibold text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'
-                }`}
-              >
-                {tab.name}
-              </span>
-
-              {active && (
-                <div className="absolute -bottom-1 h-1 w-1 rounded-full bg-[var(--accent-violet-bright)]" />
-              )}
-            </button>
-          );
-        })}
-
-        {/* PROFILE */}
-        <button
-          disabled={!userId}
-          onClick={() => userId && router.push(`/profile/${userId}`)}
-          className="flex flex-col items-center gap-1 relative transition active:scale-90"
-        >
-          <div
-            className={`flex h-7 w-7 items-center justify-center overflow-hidden rounded-full text-xs font-bold text-[var(--text-primary)] ${
-              isProfileActive ? 'ring-2 ring-[var(--accent-violet-bright)]' : ''
-            }`}
+      <div className="fixed bottom-4 left-1/2 z-50 flex h-[72px] w-[92%] max-w-[430px] -translate-x-1/2 items-center justify-between rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)] px-6 shadow-2xl backdrop-blur-md md:hidden">
+        <div className="flex items-center gap-8">
+          <button
+            type="button"
+            onClick={() => router.push('/')}
+            className="relative flex flex-col items-center gap-1 transition active:scale-90"
           >
-            {avatar ? (
-              <img src={avatar} alt="Profile avatar" className="w-full h-full object-cover" />
-            ) : (
-              username?.[0]?.toUpperCase() || 'U'
+            <Home
+              size={24}
+              className={isHomeActive ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'}
+              strokeWidth={isHomeActive ? 2.5 : 1.8}
+            />
+            <span
+              className={`text-[11px] ${isHomeActive ? 'font-semibold text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'}`}
+            >
+              Home
+            </span>
+            {isHomeActive && (
+              <div className="absolute -bottom-1 h-1 w-1 rounded-full bg-[var(--accent-violet-bright)]" />
             )}
-          </div>
+          </button>
+        </div>
 
-          <span
-            className={`text-[11px] ${
-              isProfileActive ? 'font-semibold text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'
-            }`}
-          >
-            You
-          </span>
-
-          {isProfileActive && (
-            <div className="absolute -bottom-1 w-1 h-1 bg-white rounded-full" />
-          )}
+        <button
+          type="button"
+          onClick={() => {
+            toast('Posting is in the Ruehl app. Get it from the App Store.');
+            router.replace('/');
+          }}
+          className="relative -mt-8 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-violet)] shadow-lg transition active:scale-90"
+        >
+          <Plus size={26} className="text-[var(--text-primary)]" />
         </button>
-      </div>
 
+        <div className="flex items-center gap-8">
+          <button
+            type="button"
+            onClick={() => router.push('/settings')}
+            className="relative flex flex-col items-center gap-1 transition active:scale-90"
+          >
+            <Settings
+              size={24}
+              className={isSettingsActive ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'}
+              strokeWidth={isSettingsActive ? 2.5 : 1.8}
+            />
+            <span
+              className={`text-[11px] ${isSettingsActive ? 'font-semibold text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'}`}
+            >
+              Settings
+            </span>
+            {isSettingsActive && (
+              <div className="absolute -bottom-1 h-1 w-1 rounded-full bg-[var(--accent-violet-bright)]" />
+            )}
+          </button>
+
+          <button
+            type="button"
+            disabled={!userId}
+            onClick={() => userId && router.push(`/profile/${userId}`)}
+            className="relative flex flex-col items-center gap-1 transition active:scale-90"
+          >
+            <div
+              className={`flex h-7 w-7 items-center justify-center overflow-hidden rounded-full text-xs font-bold text-[var(--text-primary)] ${
+                isProfileActive ? 'ring-2 ring-[var(--accent-violet-bright)]' : ''
+              }`}
+            >
+              {avatar ? (
+                <img src={avatar} alt="Profile avatar" className="h-full w-full object-cover" />
+              ) : (
+                username?.[0]?.toUpperCase() || 'U'
+              )}
+            </div>
+
+            <span
+              className={`text-[11px] ${
+                isProfileActive ? 'font-semibold text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'
+              }`}
+            >
+              You
+            </span>
+
+            {isProfileActive && <div className="absolute -bottom-1 h-1 w-1 rounded-full bg-[var(--accent-violet-bright)]" />}
+          </button>
+        </div>
       </div>
     </>
   );

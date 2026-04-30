@@ -2,16 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  Calendar,
-  Compass,
-  Home,
-  MessageCircle,
-  Settings,
-  Shield,
-  UserRound,
-  Zap,
-} from 'lucide-react';
+import { Home, Settings, Shield, UserRound } from 'lucide-react';
 
 export type RailNavItem = {
   key: string;
@@ -23,10 +14,6 @@ export type RailNavItem = {
 
 export const RAIL_ITEMS: RailNavItem[] = [
   { key: 'home', label: 'Home', href: '/', icon: Home, match: (p) => p === '/' },
-  { key: 'now', label: 'Now', href: '/now', icon: Zap, match: (p) => p === '/now' || p.startsWith('/now/') },
-  { key: 'sessions', label: 'Sessions', href: '/sessions', icon: Calendar, match: (p) => p.startsWith('/sessions') },
-  { key: 'search', label: 'Search', href: '/explore', icon: Compass, match: (p) => p.startsWith('/explore') },
-  { key: 'messages', label: 'Messages', href: '/messages', icon: MessageCircle, match: (p) => p.startsWith('/messages') },
 ];
 
 type Props = {
