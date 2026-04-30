@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { isUserPlatformAdmin } from '@/lib/api/userAdmin';
 import { supabase } from '@/lib/supabase';
 
 export default function AdminLoginPage() {
@@ -25,14 +26,12 @@ export default function AdminLoginPage() {
 
       if (!active || !user) return;
 
-      const [{ data: adminInstitutional }, { data: platformRow }] = await Promise.all([
+      const [{ data: adminInstitutional }, isPlatformAdmin] = await Promise.all([
         supabase.from('admin_users').select('id').eq('id', user.id).maybeSingle(),
-        supabase.from('users').select('is_admin').eq('id', user.id).maybeSingle(),
+        isUserPlatformAdmin(supabase, user.id),
       ]);
 
       if (!active) return;
-
-      const isPlatformAdmin = Boolean((platformRow as { is_admin?: boolean } | null)?.is_admin);
       if (adminInstitutional?.id || isPlatformAdmin) {
         router.replace('/admin');
       }
@@ -75,16 +74,12 @@ export default function AdminLoginPage() {
         throw new Error('Unable to verify session.');
       }
 
-      const [{ data: adminInstitutional, error: adminErr }, { data: platformRow, error: platformErr }] =
-        await Promise.all([
-          supabase.from('admin_users').select('id').eq('id', signedInUser.id).maybeSingle(),
-          supabase.from('users').select('is_admin').eq('id', signedInUser.id).maybeSingle(),
-        ]);
+      const [{ data: adminInstitutional, error: adminErr }, isPlatformAdmin] = await Promise.all([
+        supabase.from('admin_users').select('id').eq('id', signedInUser.id).maybeSingle(),
+        isUserPlatformAdmin(supabase, signedInUser.id),
+      ]);
 
       if (adminErr) throw adminErr;
-      if (platformErr) throw platformErr;
-
-      const isPlatformAdmin = Boolean((platformRow as { is_admin?: boolean } | null)?.is_admin);
       if (!adminInstitutional?.id && !isPlatformAdmin) {
         await supabase.auth.signOut();
         setError('This account does not have admin access.');

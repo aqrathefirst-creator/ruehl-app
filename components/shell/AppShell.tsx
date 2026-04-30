@@ -9,6 +9,7 @@ import NavRail from '@/components/shell/NavRail';
 import { useProfileRailUserId } from '@/components/shell/ProfileRailUserIdProvider';
 import RightRail from '@/components/shell/RightRail';
 import TopBar from '@/components/shell/TopBar';
+import { isUserPlatformAdmin } from '@/lib/api/userAdmin';
 import { supabase } from '@/lib/supabase';
 import { deriveRightRailVariant } from '@/lib/shell/rightRailVariant';
 import { useUser } from '@/lib/useUser';
@@ -34,17 +35,12 @@ function AppShellInner({ children }: Props) {
         return;
       }
 
-      const { data, error } = await supabase.from('users').select('is_admin').eq('id', user.id).maybeSingle();
+      const show = await isUserPlatformAdmin(supabase, user.id);
 
       if (cancelled) return;
 
-      /** WEB_DIRECTION §7 — admin UI gate uses `public.users.is_admin` (same source as institutional `requireAdmin`). */
-      if (error || data == null) {
-        setShowAdmin(false);
-        return;
-      }
-
-      setShowAdmin(Boolean((data as { is_admin?: boolean }).is_admin));
+      /** WEB_DIRECTION §7 — admin UI gate matches `requireAdmin` (platform flag via `is_user_admin` RPC). */
+      setShowAdmin(show);
     }
 
     void loadAdminFlag();

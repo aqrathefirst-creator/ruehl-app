@@ -1,6 +1,7 @@
 import type { User } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { isUserPlatformAdmin } from '@/lib/api/userAdmin';
 import type { AdminRole } from '@/lib/adminRoles';
 import { createServiceRoleSupabase, requireUser } from '@/lib/server/supabase';
 
@@ -56,7 +57,7 @@ function mapInstitutionalRow(row: InstitutionalRow): AdminProfile {
   };
 }
 
-/** When `users.is_admin` is set but the user is not in `admin_users`, use a platform-admin profile. */
+/** When platform admin (via `is_user_admin` RPC) but the user is not in `admin_users`, use a platform-admin profile. */
 function syntheticPlatformAdminProfile(user: User): AdminProfile {
   return {
     id: user.id,
@@ -116,19 +117,7 @@ export async function requireAdmin(authHeader: string | null) {
 
   const admin = createServiceRoleSupabase();
 
-  const { data: platformUser, error: puErr } = await admin
-    .from('users')
-    .select('is_admin')
-    .eq('id', auth.user.id)
-    .maybeSingle();
-
-  if (puErr) {
-    return {
-      ok: false,
-      error: puErr.message,
-      status: 403,
-    } satisfies AdminFailure;
-  }
+  const platformIsAdmin = await isUserPlatformAdmin(auth.supabase, auth.user.id);
 
   const { data: institutionalRow } = await admin
     .from('admin_users')
@@ -136,7 +125,7 @@ export async function requireAdmin(authHeader: string | null) {
     .eq('id', auth.user.id)
     .maybeSingle();
 
-  if (platformUser?.is_admin === true) {
+  if (platformIsAdmin) {
     const profile = institutionalRow
       ? mapInstitutionalRow(institutionalRow as InstitutionalRow)
       : syntheticPlatformAdminProfile(auth.user);

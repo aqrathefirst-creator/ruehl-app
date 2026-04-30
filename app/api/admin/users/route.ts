@@ -1,3 +1,4 @@
+import { isUserPlatformAdmin } from '@/lib/api/userAdmin';
 import { requireAdmin } from '@/lib/server/admin';
 import { jsonError, jsonOk } from '@/lib/server/responses';
 
@@ -13,7 +14,6 @@ type ProfileListRow = {
 
 type UsersListRow = {
   id: string;
-  is_admin: boolean | null;
   account_type: string | null;
   account_subtype: string | null;
 };
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
               'id, username, avatar_url, is_verified, shadow_banned, suspended_until, badge_verification_status',
             )
             .in('id', userIds),
-          auth.admin.from('users').select('id, is_admin, account_type, account_subtype').in('id', userIds),
+          auth.admin.from('users').select('id, account_type, account_subtype').in('id', userIds),
         ])
       : [{ data: [] as ProfileListRow[], error: null }, { data: [] as UsersListRow[], error: null }];
 
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
       account_type: platformUser?.account_type ?? null,
       account_subtype: platformUser?.account_subtype ?? null,
       badge_verification_status: profile?.badge_verification_status ?? null,
-      is_admin: platformUser?.is_admin === true,
+      is_admin: false,
       shadow_banned: profile?.shadow_banned ?? false,
       suspended_until: profile?.suspended_until ?? null,
       created_at: user.created_at || null,
@@ -107,7 +107,12 @@ export async function GET(request: Request) {
 
   const total = badgeFiltered.length;
   const start = (page - 1) * pageSize;
-  const items = badgeFiltered.slice(start, start + pageSize);
+  const pageItems = badgeFiltered.slice(start, start + pageSize);
+  const adminFlags =
+    pageItems.length > 0
+      ? await Promise.all(pageItems.map((u) => isUserPlatformAdmin(auth.admin, u.id)))
+      : [];
+  const items = pageItems.map((u, i) => ({ ...u, is_admin: Boolean(adminFlags[i]) }));
 
   const activeUsers = merged.filter((user) => {
     if (!user.last_sign_in_at) return false;

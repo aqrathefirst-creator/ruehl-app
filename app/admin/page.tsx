@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { isUserPlatformAdmin } from '@/lib/api/userAdmin';
 import { supabase } from '@/lib/supabase';
 import AdminLayout from '@/components/admin/AdminLayout';
 import AdminCard from '@/components/admin/AdminCard';
@@ -494,13 +495,11 @@ export default function AdminPage() {
         return;
       }
 
-      const [{ data: adminInstitutional }, { data: platformRow }] = await Promise.all([
+      const [{ data: adminInstitutional }, isPlatformAdmin] = await Promise.all([
         supabase.from('admin_users').select('id').eq('id', authUser.id).maybeSingle(),
-        supabase.from('users').select('is_admin').eq('id', authUser.id).maybeSingle(),
+        isUserPlatformAdmin(supabase, authUser.id),
       ]);
       if (!mounted) return;
-
-      const isPlatformAdmin = Boolean((platformRow as { is_admin?: boolean } | null)?.is_admin);
       if (!adminInstitutional?.id && !isPlatformAdmin) {
         router.replace('/');
         return;

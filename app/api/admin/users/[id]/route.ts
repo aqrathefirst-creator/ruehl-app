@@ -1,3 +1,4 @@
+import { isUserPlatformAdmin } from '@/lib/api/userAdmin';
 import { requireAdmin } from '@/lib/server/admin';
 import { jsonError, jsonOk } from '@/lib/server/responses';
 
@@ -49,7 +50,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const userId = id?.trim();
   if (!userId) return jsonError('user id is required', 400);
 
-  const [userResult, profileResult, platformUserResult, activityResult, postsResult, reportsResult, notesResult] =
+  const [userResult, profileResult, platformUserResult, platformIsAdmin, activityResult, postsResult, reportsResult, notesResult] =
     await Promise.all([
     auth.admin.auth.admin.getUserById(userId),
     auth.admin
@@ -59,7 +60,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       )
       .eq('id', userId)
       .maybeSingle(),
-    auth.admin.from('users').select('is_admin, account_type').eq('id', userId).maybeSingle(),
+    auth.admin.from('users').select('account_type').eq('id', userId).maybeSingle(),
+    isUserPlatformAdmin(auth.admin, userId),
     auth.admin
       .from('user_activity')
       .select('id, user_id, target_id, type, created_at')
@@ -95,12 +97,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (notesResult.error && !isMissingRelationError(notesResult.error)) return jsonError(notesResult.error.message, 400);
 
   const rawProfile = profileResult.data as Record<string, unknown> | null;
-  const platformUser = platformUserResult.data as { is_admin?: boolean | null; account_type?: string | null } | null;
+  const platformUser = platformUserResult.data as { account_type?: string | null } | null;
   const mergedProfile = rawProfile
     ? {
         ...rawProfile,
         account_type: platformUser?.account_type ?? null,
-        is_admin: Boolean(platformUser?.is_admin),
+        is_admin: platformIsAdmin,
       }
     : null;
 
