@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import DeleteAccountSection from '@/components/settings/DeleteAccountSection';
 import { supabase } from '@/lib/supabase';
 
 type Settings = {
@@ -295,6 +296,10 @@ export default function SettingsPage() {
           <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="New password (optional)" type="password" className="w-full rounded-lg bg-black/60 border border-white/10 px-3 py-2 text-sm" />
           <button disabled={saving} onClick={updateAccount} className="w-full h-11 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-sm font-semibold disabled:opacity-50">Save account changes</button>
         </section>
+
+        <div className="rounded-2xl border border-white/10 bg-[#0E0E0E] p-4">
+          <DeleteAccountSection username={username.trim()} />
+        </div>
 
         <section className="rounded-2xl border border-white/10 bg-[#0E0E0E] p-4 space-y-3">
           <h2 className="text-lg font-bold">Privacy</h2>

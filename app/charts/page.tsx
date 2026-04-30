@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { playPreviewAudio, stopPreviewAudio } from '@/lib/previewAudio'
 
 type ChartRow = {
@@ -193,12 +194,9 @@ export default function ChartsPage() {
   const [pulseSoundId, setPulseSoundId] = useState<string | null>(null)
   const [pressureMessage, setPressureMessage] = useState('Posting today can shift rankings')
 
-  const openCreateWithSound = (row: ChartRow) => {
-    if (!row.sound_id) return
-    const params = new URLSearchParams({ soundId: row.sound_id })
-    if (row.title) params.set('track', row.title)
-    if (row.artist) params.set('artist', row.artist)
-    router.push(`/create?${params.toString()}`)
+  const openCreateWithSound = (_row: ChartRow) => {
+    toast('Posting is in the Ruehl app. Get it from the App Store.')
+    router.replace('/')
   }
 
   useEffect(() => {

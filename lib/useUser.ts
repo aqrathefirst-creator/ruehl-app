@@ -15,6 +15,8 @@ export const useUser = () => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [banned, setBanned] = useState(false);
+  const [deleted, setDeleted] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -32,23 +34,28 @@ export const useUser = () => {
 
       if (!authUser) {
         setProfile(null);
+        setBanned(false);
+        setDeleted(false);
         if (mounted) setLoading(false);
         return;
       }
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
+      const [{ data: profileData }, bannedResult, deletedResult] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', authUser.id).single(),
+        supabase.rpc('is_user_banned', { uid: authUser.id }),
+        supabase.rpc('is_user_deleted', { uid: authUser.id }),
+      ]);
 
       if (!mounted) return;
+
+      setBanned(!bannedResult.error && Boolean(bannedResult.data));
+      setDeleted(!deletedResult.error && Boolean(deletedResult.data));
 
       setProfile(profileData || null);
       if (profileData) {
         sessionStorage.setItem('ruehl:profile', JSON.stringify(profileData));
       }
-      setLoading(false);
+      if (mounted) setLoading(false);
     };
 
     const cachedUser = sessionStorage.getItem('ruehl:user');
@@ -79,6 +86,7 @@ export const useUser = () => {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
+      // Includes TOKEN_REFRESHED — re-check ban/deleted after live moderation / token rotation.
       void hydrateFromSession(session);
     });
 
@@ -92,5 +100,7 @@ export const useUser = () => {
     user,
     profile,
     loading,
+    banned,
+    deleted,
   };
 };

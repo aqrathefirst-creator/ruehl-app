@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import BannedGate from '@/components/BannedGate';
 import BottomNav from '@/components/BottomNav';
+import DeletedGate from '@/components/DeletedGate';
 import NavRail from '@/components/shell/NavRail';
 import { useProfileRailUserId } from '@/components/shell/ProfileRailUserIdProvider';
 import RightRail from '@/components/shell/RightRail';
@@ -17,10 +20,15 @@ type Props = {
 
 function AppShellInner({ children }: Props) {
   const pathname = usePathname() || '';
+  const router = useRouter();
   const { profileUserId } = useProfileRailUserId();
-  const { user } = useUser();
+  const { user, loading: userLoading, banned, deleted } = useUser();
   const [showAdmin, setShowAdmin] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
+
+  const handleAppOnlyCreate = () => {
+    toast('Posting is in the Ruehl app. Get it from the App Store.');
+    router.replace('/');
+  };
 
   const rightRailVariant = deriveRightRailVariant(pathname);
 
@@ -53,6 +61,18 @@ function AppShellInner({ children }: Props) {
     };
   }, [user?.id]);
 
+  if (userLoading) {
+    return <div className="min-h-screen bg-[var(--bg-primary)]" />;
+  }
+
+  if (user && banned) {
+    return <BannedGate />;
+  }
+
+  if (user && deleted) {
+    return <DeletedGate />;
+  }
+
   const profileHref = user?.id ? `/profile/${user.id}` : '/profile';
 
   const mainPadTop = 'md:pt-14 lg:pt-0';
@@ -62,8 +82,8 @@ function AppShellInner({ children }: Props) {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <NavRail profileHref={profileHref} showAdmin={showAdmin} onOpenCreate={() => setCreateOpen(true)} />
-      <TopBar profileHref={profileHref} showAdmin={showAdmin} onOpenCreate={() => setCreateOpen(true)} />
+      <NavRail profileHref={profileHref} showAdmin={showAdmin} onOpenCreate={handleAppOnlyCreate} />
+      <TopBar profileHref={profileHref} showAdmin={showAdmin} onOpenCreate={handleAppOnlyCreate} />
       <RightRail variant={rightRailVariant} profileUserId={profileUserId} />
 
       <main className={`min-h-screen min-w-0 ${mainMarginLeft} ${mainMarginRight} ${mainPadTop}`}>
@@ -71,31 +91,6 @@ function AppShellInner({ children }: Props) {
       </main>
 
       <BottomNav />
-
-      {createOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="create-placeholder-title"
-        >
-          <div className="w-full max-w-sm rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--bg-secondary)] p-6 shadow-xl">
-            <h2 id="create-placeholder-title" className="text-lg font-semibold text-[var(--text-primary)]">
-              Create flow coming soon
-            </h2>
-            <p className="mt-2 text-sm text-[var(--text-muted)]">
-              Photo, text, and POWR-text creation on web will open here. Voice capture stays on mobile.
-            </p>
-            <button
-              type="button"
-              className="mt-6 w-full rounded-xl bg-[var(--accent-violet)] py-2.5 text-sm font-semibold text-white"
-              onClick={() => setCreateOpen(false)}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

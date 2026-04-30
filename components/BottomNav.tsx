@@ -2,10 +2,11 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { Home, Flame, Calendar, Plus, ChartColumn } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
 import { clearCreateUploadState, subscribeToCreateUpload, type CreateUploadSnapshot } from '@/lib/createUploadQueue';
-import { clearPrewarmedCameraStream, prewarmCameraStream } from '@/lib/cameraSession';
+import { prewarmCameraStream } from '@/lib/cameraSession';
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -83,7 +84,6 @@ export default function BottomNav() {
   useEffect(() => subscribeToCreateUpload(setUploadSnapshot), []);
 
   useEffect(() => {
-    router.prefetch('/create');
     router.prefetch('/now');
     router.prefetch('/notifications');
 
@@ -107,11 +107,6 @@ export default function BottomNav() {
       })
       .catch(() => undefined);
   }, [router]);
-
-  useEffect(() => {
-    if ((pathname || '').startsWith('/create')) return;
-    clearPrewarmedCameraStream();
-  }, [pathname]);
 
   // 🔥 UPDATED TABS (Train removed, Now moved)
   const tabs = [
@@ -203,15 +198,10 @@ export default function BottomNav() {
 
       {/* CENTER POST BUTTON */}
       <button
-        onClick={() => router.push('/create')}
-        onPointerEnter={() => {
-          void prewarmCameraStream('user');
-        }}
-        onTouchStart={() => {
-          void prewarmCameraStream('user');
-        }}
-        onFocus={() => {
-          void prewarmCameraStream('user');
+        type="button"
+        onClick={() => {
+          toast('Posting is in the Ruehl app. Get it from the App Store.');
+          router.replace('/');
         }}
         className="relative -mt-8 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-violet)] shadow-lg transition active:scale-90"
       >
