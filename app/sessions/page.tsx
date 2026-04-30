@@ -478,23 +478,94 @@ export default function SessionsPage() {
   useEffect(() => {
     if (!currentUserId) return;
 
+    const uid = currentUserId;
+
     const channel = supabase
       .channel('sessions-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'training_sessions' }, () => {
-        void refreshAll();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'training_requests' }, () => {
-        void refreshAll();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'training_matches' }, () => {
-        void refreshAll();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => {
-        void refreshAll();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'session_participants' }, () => {
-        void refreshAll();
-      })
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'training_sessions',
+          filter: `host_id=eq.${uid}`,
+        },
+        () => {
+          void refreshAll();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'training_requests',
+          filter: `requester_id=eq.${uid}`,
+        },
+        () => {
+          void refreshAll();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'training_requests',
+          filter: `target_id=eq.${uid}`,
+        },
+        () => {
+          void refreshAll();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'training_matches',
+          filter: `user_a=eq.${uid}`,
+        },
+        () => {
+          void refreshAll();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'training_matches',
+          filter: `user_b=eq.${uid}`,
+        },
+        () => {
+          void refreshAll();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sessions',
+          filter: `host_id=eq.${uid}`,
+        },
+        () => {
+          void refreshAll();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'session_participants',
+          filter: `user_id=eq.${uid}`,
+        },
+        () => {
+          void refreshAll();
+        }
+      )
       .subscribe();
 
     return () => {

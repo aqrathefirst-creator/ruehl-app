@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import VerificationBadge from '@/components/VerificationBadge';
 
@@ -44,6 +44,8 @@ type PostRow = {
 type ScoredPost = PowrPost & { score: number };
 
 const PAGE_SIZE = 24;
+/** Cap visible post IDs in realtime `in.(...)` filters (~256 char budget for WS filters). */
+const REALTIME_VISIBLE_POSTS_CAP = 30;
 
 export default function PowrFeedPage() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -62,7 +64,7 @@ export default function PowrFeedPage() {
     setUser((session?.user as AuthUser | null) || null);
   }
 
-  async function fetchPosts(pageNumber = 0, reset = true) {
+  const fetchPosts = useCallback(async (pageNumber = 0, reset = true) => {
     if (!user) return;
     setLoading(true);
 
@@ -154,7 +156,7 @@ export default function PowrFeedPage() {
     scored.sort((a, b) => b.score - a.score);
     setPosts((prev) => (reset ? scored : [...prev, ...scored]));
     setLoading(false);
-  }
+  }, [user]);
 
   const getLikeCount = (postId: string) => likes.filter((row) => row.post_id === postId).length;
   const getLiftCount = (postId: string) => lifts.filter((row) => row.post_id === postId).length;
@@ -223,23 +225,67 @@ export default function PowrFeedPage() {
   useEffect(() => {
     if (!user) return;
     void fetchPosts(0, true);
-  }, [user]);
+  }, [user, fetchPosts]);
+
+  const visiblePostIdsKey = useMemo(
+    () => posts.slice(0, REALTIME_VISIBLE_POSTS_CAP).map((p) => p.id).join(','),
+    [posts]
+  );
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || posts.length === 0) return;
+
+    const visiblePostIds = posts.slice(0, REALTIME_VISIBLE_POSTS_CAP).map((p) => p.id);
+    const idList = visiblePostIds.join(',');
 
     const channel = supabase
-      .channel('powr-live-engagement')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => void fetchPosts(0, true))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, () => void fetchPosts(0, true))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, () => void fetchPosts(0, true))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_lifts' }, () => void fetchPosts(0, true))
+      .channel('powr-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'posts',
+          filter: `id=in.(${idList})`,
+        },
+        () => void fetchPosts(0, true)
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'likes',
+          filter: `post_id=in.(${idList})`,
+        },
+        () => void fetchPosts(0, true)
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'comments',
+          filter: `post_id=in.(${idList})`,
+        },
+        () => void fetchPosts(0, true)
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'post_lifts',
+          filter: `post_id=in.(${idList})`,
+        },
+        () => void fetchPosts(0, true)
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user, visiblePostIdsKey, fetchPosts]);
 
   return (
     <div className="min-h-screen bg-[#090909] text-white flex justify-center">
