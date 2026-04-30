@@ -19,7 +19,8 @@ export type RuehlProfile = {
   bio: string | null;
   identity_text: string | null;
   account_type: AccountType | null;
-  account_category: AccountCategory | null;
+  /** Subcategory on `public.users` (creator, brand, podcast, etc.). */
+  account_subtype: AccountCategory | null;
   badge_verification_status: BadgeVerificationStatus;
   contact_email: string | null;
   contact_phone: string | null;
@@ -97,7 +98,7 @@ export type VerificationSubmissionDbRow = {
   id: string;
   user_id: string;
   account_type: string;
-  account_category: string;
+  account_subtype: string;
   legal_entity_name: string;
   website_url: string | null;
   user_notes: string | null;

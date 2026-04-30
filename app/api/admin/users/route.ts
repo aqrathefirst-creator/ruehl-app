@@ -15,6 +15,7 @@ type UsersListRow = {
   id: string;
   is_admin: boolean | null;
   account_type: string | null;
+  account_subtype: string | null;
 };
 
 export async function GET(request: Request) {
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
               'id, username, avatar_url, is_verified, shadow_banned, suspended_until, badge_verification_status',
             )
             .in('id', userIds),
-          auth.admin.from('users').select('id, is_admin, account_type').in('id', userIds),
+          auth.admin.from('users').select('id, is_admin, account_type, account_subtype').in('id', userIds),
         ])
       : [{ data: [] as ProfileListRow[], error: null }, { data: [] as UsersListRow[], error: null }];
 
@@ -69,6 +70,7 @@ export async function GET(request: Request) {
       avatar_url: profile?.avatar_url ?? null,
       is_verified: profile?.is_verified ?? false,
       account_type: platformUser?.account_type ?? null,
+      account_subtype: platformUser?.account_subtype ?? null,
       badge_verification_status: profile?.badge_verification_status ?? null,
       is_admin: platformUser?.is_admin === true,
       shadow_banned: profile?.shadow_banned ?? false,

@@ -21,7 +21,7 @@ export type Drop = {
   id: string;
   creatorId: string;
   accountType: AccountType;
-  accountCategory: AccountCategory;
+  accountSubtype: AccountCategory;
   audioPath: string;
   durationSeconds: number;
   caption: string | null;

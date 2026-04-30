@@ -13,7 +13,7 @@ const PAGE = 15;
 const PROFILE_SELECT =
   'id, username, avatar_url, bio, identity_text, badge_verification_status, is_verified, verified, created_at';
 
-const USERS_ACCOUNT_SELECT = 'id, account_type, account_subtype, account_category';
+const USERS_ACCOUNT_SELECT = 'id, account_type, account_subtype';
 
 function isVideoUrl(url: string) {
   const clean = url.split('?')[0]?.toLowerCase() || '';
@@ -41,8 +41,8 @@ function mapProfile(r: Record<string, unknown>): RuehlProfile {
       const t = String(r.account_type || '').trim().toLowerCase();
       return t === 'personal' || t === 'business' || t === 'media' ? t : null;
     })(),
-    account_category:
-      r.account_category == null ? null : (String(r.account_category) as AccountCategory),
+    account_subtype:
+      r.account_subtype == null ? null : (String(r.account_subtype) as AccountCategory),
     badge_verification_status: badge,
     contact_email: null,
     contact_phone: null,
@@ -98,7 +98,6 @@ export default function FeedList() {
           ? {
               account_type: u.account_type,
               account_subtype: u.account_subtype,
-              account_category: u.account_category,
             }
           : {}),
       };

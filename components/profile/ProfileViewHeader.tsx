@@ -103,7 +103,7 @@ export default function ProfileViewHeader({
 
         <AccountTypeChip
           accountType={profile.account_type}
-          accountCategory={profile.account_category}
+          accountSubtype={profile.account_subtype}
           displayCategoryLabel={profile.display_category_label}
         />
 

@@ -96,7 +96,7 @@ export default function ProfileHeader({ profile, currentSound }: Props) {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <AccountTypeChip
             accountType={profile.account_type}
-            accountCategory={profile.account_category}
+            accountSubtype={profile.account_subtype}
             displayCategoryLabel={profile.display_category_label}
           />
           {typeLabel ? (

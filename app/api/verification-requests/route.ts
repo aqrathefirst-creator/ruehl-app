@@ -1,4 +1,4 @@
-import { createServiceRoleSupabase, requireUser } from '@/lib/server/supabase';
+import { requireUser } from '@/lib/server/supabase';
 import { jsonError, jsonOk } from '@/lib/server/responses';
 
 /**
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const { data, error } = await auth.supabase
     .from('verification_submissions')
     .select(
-      'id, user_id, account_type, account_category, legal_entity_name, website_url, user_notes, document_path, status, rejection_reason, submitted_at, reviewed_at, reviewed_by',
+      'id, user_id, account_type, account_subtype, legal_entity_name, website_url, user_notes, document_path, status, rejection_reason, submitted_at, reviewed_at, reviewed_by',
     )
     .eq('user_id', auth.user.id)
     .order('submitted_at', { ascending: false });
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as {
     account_type?: string;
-    account_category?: string;
+    account_subtype?: string;
     legal_entity_name?: string;
     website_url?: string | null;
     user_notes?: string | null;
@@ -36,15 +36,15 @@ export async function POST(request: Request) {
   } | null;
 
   const accountType = body?.account_type?.trim();
-  const accountCategory = body?.account_category?.trim();
+  const accountSubtype = body?.account_subtype?.trim();
   const legalEntityName = body?.legal_entity_name?.trim();
   const documentPath = body?.document_path?.trim();
 
   if (!accountType || !['business', 'media'].includes(accountType)) {
     return jsonError('account_type must be business or media', 400);
   }
-  if (!accountCategory || accountCategory.length < 2) {
-    return jsonError('account_category is required', 400);
+  if (!accountSubtype || accountSubtype.length < 2) {
+    return jsonError('account_subtype is required', 400);
   }
   if (!legalEntityName || legalEntityName.length < 2) {
     return jsonError('legal_entity_name is required', 400);
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     .insert({
       user_id: auth.user.id,
       account_type: accountType,
-      account_category: accountCategory,
+      account_subtype: accountSubtype,
       legal_entity_name: legalEntityName,
       website_url: body?.website_url?.trim() || null,
       user_notes: body?.user_notes?.trim() || null,
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       status: 'pending',
     })
     .select(
-      'id, user_id, account_type, account_category, legal_entity_name, website_url, user_notes, document_path, status, submitted_at',
+      'id, user_id, account_type, account_subtype, legal_entity_name, website_url, user_notes, document_path, status, submitted_at',
     )
     .single();
 

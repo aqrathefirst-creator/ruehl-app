@@ -999,7 +999,7 @@ export default function AdminPage() {
                         {listData.map((row) => {
                           const r = row as GenericItem;
                           const at = parseAccountType(r.account_type);
-                          const acRaw = r.account_category == null ? null : String(r.account_category);
+                          const acRaw = r.account_subtype == null ? null : String(r.account_subtype);
                           const ac = acRaw as AccountCategory | null;
                           return (
                             <tr key={String(r.id)} className="border-b border-white/5">
@@ -1010,7 +1010,7 @@ export default function AdminPage() {
                                 <div className="flex flex-wrap items-center gap-2">
                                   {at && ac ? (
                                     <>
-                                      <AccountTypeChip accountType={at} accountCategory={ac} displayCategoryLabel />
+                                      <AccountTypeChip accountType={at} accountSubtype={ac} displayCategoryLabel />
                                       <span className="text-gray-300">{getCategoryLabel(ac)}</span>
                                     </>
                                   ) : (
@@ -1088,7 +1088,7 @@ export default function AdminPage() {
                         <tbody>
                           {(listData as VerificationQueueRow[]).map((sub) => {
                             const at = sub.accountType;
-                            const ac = sub.accountCategory as AccountCategory;
+                            const ac = sub.accountSubtype as AccountCategory;
                             return (
                               <tr key={sub.id} className="border-b border-white/5 align-top">
                                 <td className="px-3 py-2">
@@ -1108,7 +1108,7 @@ export default function AdminPage() {
                                 <td className="px-3 py-2 text-gray-200">{getTypeLabel(at)}</td>
                                 <td className="px-3 py-2">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <AccountTypeChip accountType={at} accountCategory={ac} displayCategoryLabel />
+                                    <AccountTypeChip accountType={at} accountSubtype={ac} displayCategoryLabel />
                                     <span className="text-gray-300">{getCategoryLabel(ac)}</span>
                                   </div>
                                 </td>

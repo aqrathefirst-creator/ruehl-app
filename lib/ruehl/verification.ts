@@ -36,7 +36,7 @@ export type VerificationSubmission = {
   id: string;
   userId: string;
   accountType: 'business' | 'media'; // Personal can't submit in V1
-  accountCategory: string;
+  accountSubtype: string;
   legalEntityName: string;
   websiteUrl: string | null;
   userNotes: string | null;
@@ -51,7 +51,7 @@ export type VerificationSubmission = {
 /** Input shape for creating a submission (client-side, pre-insert). */
 export type VerificationSubmissionInput = {
   accountType: 'business' | 'media';
-  accountCategory: string;
+  accountSubtype: string;
   legalEntityName: string;
   websiteUrl?: string;
   userNotes?: string;

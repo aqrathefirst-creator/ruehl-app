@@ -14,7 +14,7 @@ const PAGE_SIZE = 12;
 const PROFILE_SELECT =
   'id, username, avatar_url, bio, identity_text, badge_verification_status, is_verified, verified, created_at';
 
-const USERS_ACCOUNT_SELECT = 'id, account_type, account_subtype, account_category';
+const USERS_ACCOUNT_SELECT = 'id, account_type, account_subtype';
 
 function formatRelativeTime(createdAt: string | null): string {
   if (!createdAt) return '';
@@ -48,7 +48,7 @@ function mapProfile(row: Record<string, unknown>): RuehlProfile {
       const t = String(row.account_type || '').trim().toLowerCase();
       return t === 'personal' || t === 'business' || t === 'media' ? t : null;
     })(),
-    account_category: (row.account_category == null ? null : String(row.account_category)) as AccountCategory | null,
+    account_subtype: (row.account_subtype == null ? null : String(row.account_subtype)) as AccountCategory | null,
     badge_verification_status: badge,
     contact_email: null,
     contact_phone: null,
@@ -95,7 +95,6 @@ export default function NowPage() {
           ? {
               account_type: u.account_type,
               account_subtype: u.account_subtype,
-              account_category: u.account_category,
             }
           : {}),
       };

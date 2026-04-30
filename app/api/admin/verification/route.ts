@@ -17,7 +17,7 @@ function mapSubmissionRow(
     id: String(row.id),
     userId: String(row.user_id),
     accountType: (row.account_type as 'business' | 'media') || 'business',
-    accountCategory: String(row.account_category || ''),
+    accountSubtype: String(row.account_subtype || ''),
     legalEntityName: String(row.legal_entity_name || ''),
     websiteUrl: row.website_url == null ? null : String(row.website_url),
     userNotes: row.user_notes == null ? null : String(row.user_notes),
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   let q = auth.admin
     .from('verification_submissions')
     .select(
-      'id, user_id, account_type, account_category, legal_entity_name, website_url, user_notes, document_path, status, rejection_reason, submitted_at, reviewed_at, reviewed_by',
+      'id, user_id, account_type, account_subtype, legal_entity_name, website_url, user_notes, document_path, status, rejection_reason, submitted_at, reviewed_at, reviewed_by',
     )
     .order('submitted_at', { ascending: false });
 

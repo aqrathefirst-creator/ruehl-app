@@ -27,7 +27,7 @@ function logFeedError(context: string, err: unknown) {
 const PROFILE_RAIL_SELECT =
   'id, username, avatar_url, bio, identity_text, badge_verification_status, is_verified, verified, created_at';
 
-const USERS_RAIL_ACCOUNT_SELECT = 'id, account_type, account_subtype, account_category';
+const USERS_RAIL_ACCOUNT_SELECT = 'id, account_type, account_subtype';
 
 const ALL_CAT: AccountCategory[] = [
   'personal',
@@ -50,7 +50,7 @@ function parseAccountType(raw: string | null): AccountType | null {
   return null;
 }
 
-function parseAccountCategory(raw: string | null): AccountCategory | null {
+function parseAccountSubtype(raw: string | null): AccountCategory | null {
   if (!raw) return null;
   const s = String(raw).trim().toLowerCase();
   return ALL_CAT.includes(s as AccountCategory) ? (s as AccountCategory) : null;
@@ -80,7 +80,7 @@ function mapProfileRow(p: Record<string, unknown>): RuehlProfile {
     identity_text:
       typeof p.identity_text === 'string' ? p.identity_text : p.identity_text == null ? null : String(p.identity_text),
     account_type: parseAccountType(p.account_type == null ? null : String(p.account_type)),
-    account_category: parseAccountCategory(p.account_category == null ? null : String(p.account_category)),
+    account_subtype: parseAccountSubtype(p.account_subtype == null ? null : String(p.account_subtype)),
     badge_verification_status: parsedBadge ?? (legacyVerified === true ? 'approved' : null),
     contact_email: null,
     contact_phone: null,
@@ -398,7 +398,6 @@ export async function getSuggestedProfiles(currentUserId: string | null, lim: nu
             ? {
                 account_type: u.account_type,
                 account_subtype: u.account_subtype,
-                account_category: u.account_category,
               }
             : {}),
         };

@@ -22,13 +22,13 @@ function isUuid(value: string): boolean {
   return UUID_RE.test(value.trim());
 }
 
-/** `account_type` / `account_subtype` / `account_category` live on `public.users`, not `profiles`. */
+/** `account_type` and `account_subtype` live on `public.users`, not `profiles`. */
 const PROFILE_SELECT =
   'id, username, avatar_url, bio, identity_text, badge_verification_status, contact_email, contact_phone, website, display_category_label, display_contact_info, category_picked_at, is_verified, created_at';
 
-/** Account tier + subtype + category: SELECT on `public.users` (column grants). */
+/** Account tier + subtype: SELECT on `public.users` (column grants). */
 const USERS_SELECT =
-  'id, username, avatar_url, bio, identity_text, account_type, account_subtype, account_category, website, display_category_label, display_contact_info, category_picked_at, created_at';
+  'id, username, avatar_url, bio, identity_text, account_type, account_subtype, website, display_category_label, display_contact_info, category_picked_at, created_at';
 
 function parseAccountType(raw: string | null): AccountType | null {
   const s = String(raw || '').trim().toLowerCase();
@@ -51,7 +51,8 @@ const ALL_CAT: AccountCategory[] = [
   'publication',
 ];
 
-function parseAccountCategory(raw: string | null): AccountCategory | null {
+/** Parses `public.users.account_subtype` (same value set as legacy “category” enums). */
+function parseAccountSubtype(raw: string | null): AccountCategory | null {
   if (!raw) return null;
   const s = String(raw).trim().toLowerCase();
   return ALL_CAT.includes(s as AccountCategory) ? (s as AccountCategory) : null;
@@ -79,7 +80,7 @@ export function mapProfileRow(p: Record<string, unknown>, u: Record<string, unkn
   };
 
   const at = parseAccountType(pickStr('account_type'));
-  const ac = parseAccountCategory(pickStr('account_category'));
+  const sub = parseAccountSubtype(pickStr('account_subtype'));
 
   return {
     id: String(p.id ?? ''),
@@ -88,7 +89,7 @@ export function mapProfileRow(p: Record<string, unknown>, u: Record<string, unkn
     bio: pickStr('bio'),
     identity_text: pickStr('identity_text'),
     account_type: at,
-    account_category: ac,
+    account_subtype: sub,
     badge_verification_status: parseBadgeVerification(pickStr('badge_verification_status')),
     contact_email: pickStr('contact_email'),
     contact_phone: pickStr('contact_phone'),

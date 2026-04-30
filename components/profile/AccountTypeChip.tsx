@@ -5,15 +5,15 @@ import { getCategoryLabel } from '@/lib/ruehl/accountTypes';
 
 type Props = {
   accountType: AccountType | null | undefined;
-  accountCategory: AccountCategory | null | undefined;
+  accountSubtype: AccountCategory | null | undefined;
   displayCategoryLabel: boolean | null | undefined;
 };
 
-export default function AccountTypeChip({ accountType, accountCategory, displayCategoryLabel }: Props) {
-  if (!displayCategoryLabel || !accountType || !accountCategory) return null;
-  if (accountCategory === 'personal') return null;
+export default function AccountTypeChip({ accountType, accountSubtype, displayCategoryLabel }: Props) {
+  if (!displayCategoryLabel || !accountType || !accountSubtype) return null;
+  if (accountSubtype === 'personal') return null;
 
-  const label = getCategoryLabel(accountCategory);
+  const label = getCategoryLabel(accountSubtype);
 
   return (
     <span
