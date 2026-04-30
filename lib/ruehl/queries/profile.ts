@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AccountCategory, AccountType } from '@/lib/ruehl/accountTypes';
 import type { RuehlPost, RuehlProfile } from '@/lib/ruehl/types';
 import { isPowrPost, normalizePost, resolvePostSound, type ResolvedSound } from '@/lib/ruehl/posts';
@@ -59,7 +60,7 @@ function parseBadgeVerification(raw: string | null): RuehlProfile['badge_verific
   return parseVerificationStatus(normalized);
 }
 
-function mapProfileRow(p: Record<string, unknown>, u: Record<string, unknown> | null): RuehlProfile {
+export function mapProfileRow(p: Record<string, unknown>, u: Record<string, unknown> | null): RuehlProfile {
   const users = u || {};
   const pickStr = (key: string) => {
     const pv = p[key];
@@ -101,19 +102,22 @@ function mapProfileRow(p: Record<string, unknown>, u: Record<string, unknown> | 
  * Resolve profile by UUID or `@username` / `username` string.
  * Returns `null` when not found; throws on transport errors.
  */
-export async function getProfile(userIdOrUsername: string): Promise<RuehlProfile | null> {
+export async function getProfile(
+  userIdOrUsername: string,
+  client: SupabaseClient = supabase,
+): Promise<RuehlProfile | null> {
   const raw = String(userIdOrUsername || '').trim();
   if (!raw) return null;
 
   let profileRow: Record<string, unknown> | null = null;
 
   if (isUuid(raw)) {
-    const { data, error } = await supabase.from('profiles').select(PROFILE_SELECT).eq('id', raw).maybeSingle();
+    const { data, error } = await client.from('profiles').select(PROFILE_SELECT).eq('id', raw).maybeSingle();
     if (error) throw error;
     profileRow = (data as Record<string, unknown>) ?? null;
   } else {
     const normalized = raw.replace(/^@+/, '');
-    const { data: fromUsers, error: e1 } = await supabase
+    const { data: fromUsers, error: e1 } = await client
       .from('users')
       .select('id')
       .ilike('username', normalized)
@@ -121,12 +125,12 @@ export async function getProfile(userIdOrUsername: string): Promise<RuehlProfile
     if (e1) throw e1;
     const uid = (fromUsers as { id?: string } | null)?.id;
     if (uid) {
-      const { data, error } = await supabase.from('profiles').select(PROFILE_SELECT).eq('id', uid).maybeSingle();
+      const { data, error } = await client.from('profiles').select(PROFILE_SELECT).eq('id', uid).maybeSingle();
       if (error) throw error;
       profileRow = (data as Record<string, unknown>) ?? null;
     }
     if (!profileRow) {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('profiles')
         .select(PROFILE_SELECT)
         .ilike('username', normalized)
@@ -139,7 +143,7 @@ export async function getProfile(userIdOrUsername: string): Promise<RuehlProfile
   if (!profileRow?.id) return null;
 
   let mergedUsers: Record<string, unknown> | null = null;
-  const { data: userRow, error: userErr } = await supabase
+  const { data: userRow, error: userErr } = await client
     .from('users')
     .select(USERS_SELECT)
     .eq('id', String(profileRow.id))
@@ -282,8 +286,11 @@ export type CurrentSoundDisplay = ResolvedSound & {
 /**
  * Latest post with an attachable sound; enriches licensed rows with `licensed_tracks` for artwork + Spotify id.
  */
-export async function getCurrentSound(profileId: string): Promise<CurrentSoundDisplay | null> {
-  const { data, error } = await supabase
+export async function getCurrentSound(
+  profileId: string,
+  client: SupabaseClient = supabase,
+): Promise<CurrentSoundDisplay | null> {
+  const { data, error } = await client
     .from('posts')
     .select('*')
     .eq('user_id', profileId)
@@ -300,7 +307,7 @@ export async function getCurrentSound(profileId: string): Promise<CurrentSoundDi
     let spotifyTrackId: string | null = null;
 
     if (resolved.kind === 'licensed') {
-      const { data: lt } = await supabase
+      const { data: lt } = await client
         .from('licensed_tracks')
         .select('cover_url, spotify_id')
         .eq('id', resolved.id)

@@ -13,10 +13,10 @@ import {
   type ProfileTab,
 } from '@/lib/ruehl/queries/profile';
 import type { RuehlPost } from '@/lib/ruehl/types';
-import ProfileHeader from '@/components/profile/ProfileHeader';
+import ProfileViewHeader from '@/components/profile/ProfileViewHeader';
 import { useProfileRailUserId } from '@/components/shell/ProfileRailUserIdProvider';
 import { useUser } from '@/lib/useUser';
-import ProfileTabs from '@/components/profile/ProfileTabs';
+import ProfileFeedTabs from '@/components/profile/ProfileFeedTabs';
 import ProfileTabContent from '@/components/profile/ProfileTabContent';
 import ProfileLoadingSkeleton from '@/components/profile/ProfileLoadingSkeleton';
 
@@ -225,7 +225,7 @@ export default function ProfileView() {
 
   return (
     <div className="mx-auto w-full max-w-[960px] overflow-x-hidden px-4 pb-28 pt-2 md:pb-12">
-      <ProfileHeader
+      <ProfileViewHeader
         profile={profile}
         stats={stats}
         isOwnProfile={isOwn}
@@ -236,7 +236,7 @@ export default function ProfileView() {
         isFollowing={followingThem}
       />
 
-      <ProfileTabs active={activeTab} onChange={onTabChange} />
+      <ProfileFeedTabs active={activeTab} onChange={onTabChange} />
 
       <ProfileTabContent
         tab={activeTab}
