@@ -7,7 +7,7 @@ import {
   Compass,
   Home,
   MessageCircle,
-  Plus,
+  Settings,
   Shield,
   Zap,
 } from 'lucide-react';
@@ -24,18 +24,17 @@ export const TOP_BAR_NAV_ITEMS: NavItemDef[] = [
   { label: 'Now', href: '/now', icon: Zap, match: (pathname) => pathname === '/now' || pathname.startsWith('/now/') },
   { label: 'Sessions', href: '/sessions', icon: Calendar, match: (pathname) => pathname.startsWith('/sessions') },
   { label: 'Search', href: '/explore', icon: Compass, match: (pathname) => pathname.startsWith('/explore') },
-  { label: 'Create', href: '#create', icon: Plus, match: () => false },
   { label: 'Messages', href: '/messages', icon: MessageCircle, match: (pathname) => pathname.startsWith('/messages') },
 ];
 
 type Props = {
   profileHref: string;
   showAdmin: boolean;
-  onOpenCreate: () => void;
 };
 
-export default function TopBar({ profileHref, showAdmin, onOpenCreate }: Props) {
+export default function TopBar({ profileHref, showAdmin }: Props) {
   const pathname = usePathname() || '';
+  const settingsActive = pathname.startsWith('/settings');
 
   return (
     <header className="fixed left-0 right-0 top-0 z-40 hidden h-14 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-primary)] px-4 md:flex lg:hidden">
@@ -43,19 +42,6 @@ export default function TopBar({ profileHref, showAdmin, onOpenCreate }: Props) 
       <nav className="flex flex-1 items-center justify-end gap-1 overflow-x-auto" aria-label="Primary">
         {TOP_BAR_NAV_ITEMS.map((item) => {
           const Icon = item.icon;
-          if (item.href === '#create') {
-            return (
-              <button
-                key={item.label}
-                type="button"
-                onClick={onOpenCreate}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
-                aria-label="Create"
-              >
-                <Icon size={20} strokeWidth={2} />
-              </button>
-            );
-          }
           const active = item.match(pathname);
           return (
             <Link
@@ -81,6 +67,16 @@ export default function TopBar({ profileHref, showAdmin, onOpenCreate }: Props) 
           aria-label="You"
         >
           You
+        </Link>
+        <Link
+          href="/settings"
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+            settingsActive ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
+          }`}
+          aria-label="Settings"
+          aria-current={settingsActive ? 'page' : undefined}
+        >
+          <Settings size={20} strokeWidth={settingsActive ? 2.4 : 2} />
         </Link>
         {showAdmin && (
           <Link

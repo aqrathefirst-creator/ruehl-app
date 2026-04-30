@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { usePathname } from 'next/navigation';
 import BannedGate from '@/components/BannedGate';
 import BottomNav from '@/components/BottomNav';
 import DeletedGate from '@/components/DeletedGate';
@@ -20,15 +19,9 @@ type Props = {
 
 function AppShellInner({ children }: Props) {
   const pathname = usePathname() || '';
-  const router = useRouter();
   const { profileUserId } = useProfileRailUserId();
   const { user, loading: userLoading, banned, deleted } = useUser();
   const [showAdmin, setShowAdmin] = useState(false);
-
-  const handleAppOnlyCreate = () => {
-    toast('Posting is in the Ruehl app. Get it from the App Store.');
-    router.replace('/');
-  };
 
   const rightRailVariant = deriveRightRailVariant(pathname);
 
@@ -82,8 +75,8 @@ function AppShellInner({ children }: Props) {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <NavRail profileHref={profileHref} showAdmin={showAdmin} onOpenCreate={handleAppOnlyCreate} />
-      <TopBar profileHref={profileHref} showAdmin={showAdmin} onOpenCreate={handleAppOnlyCreate} />
+      <NavRail profileHref={profileHref} showAdmin={showAdmin} />
+      <TopBar profileHref={profileHref} showAdmin={showAdmin} />
       <RightRail variant={rightRailVariant} profileUserId={profileUserId} />
 
       <main className={`min-h-screen min-w-0 ${mainMarginLeft} ${mainMarginRight} ${mainPadTop}`}>
