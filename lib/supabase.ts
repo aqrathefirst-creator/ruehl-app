@@ -290,19 +290,39 @@ const compressVideo = async (
   }
 };
 
+const POST_MEDIA_PRIVATE_BUCKET = 'post-media-private';
+
 export const uploadPostMedia = async (file: File, userId: string) => {
   const fileExt = file.name.split('.').pop();
   const fileName = `${userId}-${Date.now()}.${fileExt}`;
   const filePath = `posts/${fileName}`;
 
-  const { error } = await supabase.storage.from('media').upload(filePath, file);
+  const { error } = await supabase.storage.from(POST_MEDIA_PRIVATE_BUCKET).upload(filePath, file);
 
   if (error) {
     console.error('Upload error:', error);
     throw error;
   }
 
-  const { data } = supabase.storage.from('media').getPublicUrl(filePath);
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error('Not authenticated');
 
-  return data.publicUrl;
+  const res = await fetch('/api/storage/signed-url', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ bucket: POST_MEDIA_PRIVATE_BUCKET, path: filePath }),
+  });
+
+  if (!res.ok) {
+    const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(errBody.error || `Signed URL request failed (${res.status})`);
+  }
+
+  const payload = (await res.json()) as { url?: string };
+  if (!payload.url) throw new Error('Signed URL response missing url');
+  return payload.url;
 };

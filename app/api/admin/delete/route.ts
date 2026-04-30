@@ -12,7 +12,9 @@ export async function POST(request: Request) {
   if (userId === auth.user.id) return jsonError('You cannot delete yourself', 400);
   if (body?.confirm !== 'DELETE') return jsonError('Explicit DELETE confirmation is required', 400);
 
-  const cleanup = await auth.supabase.rpc('admin_delete_user', { target_user_id: userId });
+  // Part 1 RPC lockdown: `admin_delete_user` is only executable as service_role / postgres.
+  // `requireAdmin` already proved the caller is an admin; use service-role client (not user JWT).
+  const cleanup = await auth.admin.rpc('admin_delete_user', { target_user_id: userId });
   if (cleanup.error) return jsonError(cleanup.error.message, 400);
 
   const { error } = await auth.admin.auth.admin.deleteUser(userId);

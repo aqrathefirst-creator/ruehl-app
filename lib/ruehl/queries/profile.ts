@@ -24,8 +24,9 @@ function isUuid(value: string): boolean {
 const PROFILE_SELECT =
   'id, username, avatar_url, bio, identity_text, account_type, account_category, badge_verification_status, contact_email, contact_phone, website, display_category_label, display_contact_info, category_picked_at, is_verified, created_at';
 
+/** Excludes `contact_email` / `contact_phone` — column-level grants on `public.users` (use `profiles` + RPCs for contact). */
 const USERS_SELECT =
-  'id, username, avatar_url, bio, identity_text, account_type, account_category, contact_email, contact_phone, website, display_category_label, display_contact_info, category_picked_at, created_at';
+  'id, username, avatar_url, bio, identity_text, account_type, account_category, website, display_category_label, display_contact_info, category_picked_at, created_at';
 
 function parseAccountType(raw: string | null): AccountType | null {
   if (raw === 'personal' || raw === 'business' || raw === 'media') return raw;
