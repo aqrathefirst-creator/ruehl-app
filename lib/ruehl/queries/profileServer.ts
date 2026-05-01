@@ -35,6 +35,8 @@ export async function getProfileByUsername(username: string): Promise<RuehlProfi
 }
 
 export type ProfileStatsRow = {
+  /** Public post count (matches native Profile stats strip). */
+  posts: number;
   liftsReceived: number;
   followers: number;
   following: number;
@@ -62,15 +64,16 @@ async function countTuneInsForCreator(
 export async function getProfileStatsRow(profileId: string): Promise<ProfileStatsRow> {
   const supabase = await createServerSupabase();
 
-  const [followersRes, followingRes, postsRes, dropsRes, tuneIns] = await Promise.all([
+  const [followersRes, followingRes, postsCountRes, postsSampleRes, dropsRes, tuneIns] = await Promise.all([
     supabase.from('follows').select('follower_id', { count: 'exact', head: true }).eq('following_id', profileId),
     supabase.from('follows').select('following_id', { count: 'exact', head: true }).eq('follower_id', profileId),
+    supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', profileId),
     supabase.from('posts').select('id').eq('user_id', profileId).limit(800),
     supabase.from('drops').select('id', { count: 'exact', head: true }).eq('creator_id', profileId),
     countTuneInsForCreator(supabase, profileId),
   ]);
 
-  const postIds = ((postsRes.data || []) as { id: string }[]).map((r) => r.id).filter(Boolean);
+  const postIds = ((postsSampleRes.data || []) as { id: string }[]).map((r) => r.id).filter(Boolean);
   let liftsReceived = 0;
   if (postIds.length > 0) {
     const { count, error } = await supabase
@@ -81,11 +84,67 @@ export async function getProfileStatsRow(profileId: string): Promise<ProfileStat
   }
 
   return {
+    posts: postsCountRes.count ?? 0,
     liftsReceived,
     followers: followersRes.count ?? 0,
     following: followingRes.count ?? 0,
     drops: dropsRes.error ? 0 : dropsRes.count ?? 0,
     tuneIns,
+  };
+}
+
+/** Minimal lifted-post tiles for Identity page grid (server-only). */
+export type IdentityLiftedThumb = { id: string; thumbnailUrl: string | null };
+
+export type IdentityPagePayload = {
+  liftsGiven: number;
+  echoCount: number;
+  liftedThumbs: IdentityLiftedThumb[];
+};
+
+function pickPostThumbnail(row: Record<string, unknown>): string | null {
+  const thumb = row.thumbnail_url;
+  if (typeof thumb === 'string' && thumb.trim()) return thumb.trim();
+  const urls = row.media_urls;
+  if (Array.isArray(urls) && urls[0] != null) return String(urls[0]);
+  const mu = row.media_url;
+  return typeof mu === 'string' && mu.trim() ? mu.trim() : null;
+}
+
+export async function getIdentityPagePayload(profileId: string): Promise<IdentityPagePayload> {
+  const supabase = await createServerSupabase();
+
+  const [liftsGivenRes, echoesRes, liftsRows] = await Promise.all([
+    supabase.from('post_lifts').select('id', { count: 'exact', head: true }).eq('user_id', profileId),
+    supabase.from('drop_echoes').select('id', { count: 'exact', head: true }).eq('user_id', profileId),
+    supabase
+      .from('post_lifts')
+      .select('post_id')
+      .eq('user_id', profileId)
+      .order('created_at', { ascending: false })
+      .limit(120),
+  ]);
+
+  const liftIds = [...new Set((liftsRows.data || []).map((l: { post_id?: string }) => l.post_id).filter(Boolean))] as string[];
+  const slice = liftIds.slice(0, 12);
+
+  let liftedThumbs: IdentityLiftedThumb[] = [];
+  if (slice.length > 0) {
+    const { data: posts } = await supabase
+      .from('posts')
+      .select('id, thumbnail_url, media_url, media_urls')
+      .in('id', slice);
+    const byId = new Map((posts || []).map((p: Record<string, unknown>) => [String(p.id), p as Record<string, unknown>]));
+    liftedThumbs = slice.map((id) => ({
+      id,
+      thumbnailUrl: pickPostThumbnail(byId.get(id) || {}),
+    }));
+  }
+
+  return {
+    liftsGiven: liftsGivenRes.error ? 0 : liftsGivenRes.count ?? 0,
+    echoCount: echoesRes.error ? 0 : echoesRes.count ?? 0,
+    liftedThumbs,
   };
 }
 

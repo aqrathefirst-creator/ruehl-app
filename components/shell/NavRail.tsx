@@ -1,16 +1,31 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useState } from 'react';
-import { Bell, Compass, Flame, Home, Plus, User } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { Bell, Compass, Flame, Home, Plus, Search, User, X } from 'lucide-react';
 import CreateModal from '@/components/shell/CreateModal';
 import { useUser } from '@/lib/useUser';
 
 export default function NavRail() {
   const pathname = usePathname() || '';
+  const router = useRouter();
   const { user, profile } = useUser();
   const [showCreate, setShowCreate] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSearchOpen(false);
+        setSearchQuery('');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [searchOpen]);
 
   const profileHref = profile?.username
     ? `/${String(profile.username).replace(/^@+/, '')}`
@@ -53,6 +68,55 @@ export default function NavRail() {
           <Link href="/" className="block">
             <h1 className="text-2xl font-bold tracking-tight text-[#a855f7]">RUEHL</h1>
           </Link>
+        </div>
+
+        <div className="px-3 pb-1">
+          {searchOpen ? (
+            <div className="relative">
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search users, posts, sounds"
+                autoFocus
+                className="w-full rounded-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] py-2.5 pl-10 pr-9 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-meta)] focus:outline-none focus:ring-1 focus:ring-zinc-600"
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setSearchOpen(false);
+                    setSearchQuery('');
+                  }
+                  if (e.key === 'Enter' && searchQuery.trim()) {
+                    const q = searchQuery.trim();
+                    setSearchOpen(false);
+                    setSearchQuery('');
+                    router.push(`/explore?q=${encodeURIComponent(q)}`);
+                  }
+                }}
+                aria-label="Search"
+              />
+              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-meta)]" />
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchOpen(false);
+                  setSearchQuery('');
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-meta)] hover:text-[var(--text-primary)]"
+                aria-label="Close search"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="flex w-full items-center gap-4 rounded-lg px-4 py-3 text-left text-base text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
+            >
+              <Search size={26} strokeWidth={2} />
+              <span>Search</span>
+            </button>
+          )}
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto px-3" aria-label="Primary">

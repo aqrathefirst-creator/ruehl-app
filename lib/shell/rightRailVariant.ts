@@ -34,6 +34,12 @@ export function deriveRightRailVariant(pathname: string): RightRailVariant {
   if (p === '/' || p === '/now' || p === '/notifications') return 'home';
   if (p.startsWith('/profile/')) return 'profile';
 
+  const identityMatch = /^\/([^/]+)\/identity\/?$/.exec(p);
+  if (identityMatch) {
+    const seg = identityMatch[1].toLowerCase();
+    if (!RESERVED_USERNAME_SEGMENTS.has(seg) && seg.length > 0 && !seg.includes('.')) return 'profile';
+  }
+
   const soundMatch = /^\/sound\/([^/]+)\/?$/.exec(p);
   if (soundMatch) return 'post';
 

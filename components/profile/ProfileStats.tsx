@@ -8,49 +8,49 @@ type Props = {
   username: string | null;
 };
 
-function StatBlock({ value, label }: { value: number; label: string }) {
-  return (
-    <div className="flex min-w-[72px] flex-1 flex-col items-center rounded-lg py-2">
-      <span className="text-lg font-bold tabular-nums text-white sm:text-xl">{formatCompact(value)}</span>
-      <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{label}</span>
-    </div>
-  );
-}
-
 export default function ProfileStats({ stats, username }: Props) {
   const un = String(username || '').trim().replace(/^@+/, '');
   const base = un ? `/${encodeURIComponent(un)}` : '';
 
   return (
     <section
-      className="mx-auto grid max-w-2xl grid-cols-2 gap-2 border-y border-zinc-800/80 px-2 py-3 sm:grid-cols-5"
+      className="mx-auto flex max-w-2xl items-center gap-6 border-b border-zinc-800/50 px-4 py-3 sm:gap-10"
       aria-label="Profile stats"
     >
-      <StatBlock value={stats.liftsReceived} label="Lifts" />
+      <div className="min-w-0 flex-1 text-center">
+        <div className="text-lg font-bold tabular-nums text-white sm:text-xl">{formatCompact(stats.posts)}</div>
+        <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Posts</div>
+      </div>
+
       {base ? (
         <Link
           href={`${base}/followers`}
-          className="flex min-w-[72px] flex-1 flex-col items-center rounded-lg py-2 transition hover:bg-white/5"
+          className="min-w-0 flex-1 text-center transition hover:bg-white/5 sm:rounded-lg sm:py-1"
         >
-          <span className="text-lg font-bold tabular-nums text-white sm:text-xl">{formatCompact(stats.followers)}</span>
-          <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Followers</span>
+          <div className="text-lg font-bold tabular-nums text-white sm:text-xl">{formatCompact(stats.followers)}</div>
+          <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Followers</div>
         </Link>
       ) : (
-        <StatBlock value={stats.followers} label="Followers" />
+        <div className="min-w-0 flex-1 text-center">
+          <div className="text-lg font-bold tabular-nums text-white sm:text-xl">{formatCompact(stats.followers)}</div>
+          <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Followers</div>
+        </div>
       )}
+
       {base ? (
         <Link
           href={`${base}/following`}
-          className="flex min-w-[72px] flex-1 flex-col items-center rounded-lg py-2 transition hover:bg-white/5"
+          className="min-w-0 flex-1 text-center transition hover:bg-white/5 sm:rounded-lg sm:py-1"
         >
-          <span className="text-lg font-bold tabular-nums text-white sm:text-xl">{formatCompact(stats.following)}</span>
-          <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Following</span>
+          <div className="text-lg font-bold tabular-nums text-white sm:text-xl">{formatCompact(stats.following)}</div>
+          <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Following</div>
         </Link>
       ) : (
-        <StatBlock value={stats.following} label="Following" />
+        <div className="min-w-0 flex-1 text-center">
+          <div className="text-lg font-bold tabular-nums text-white sm:text-xl">{formatCompact(stats.following)}</div>
+          <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Following</div>
+        </div>
       )}
-      <StatBlock value={stats.drops} label="Drops" />
-      <StatBlock value={stats.tuneIns} label="Tune-ins" />
     </section>
   );
 }
