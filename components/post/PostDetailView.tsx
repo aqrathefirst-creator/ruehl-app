@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { PostDetailPageData } from '@/lib/ruehl/queries/post';
 import PostAuthor from '@/components/post/PostAuthor';
 import PostMedia from '@/components/post/PostMedia';
@@ -20,6 +20,10 @@ export default function PostDetailView({ initial }: Props) {
   const post = useMemo(() => initial.post, [initial.post]);
   const author = initial.author;
 
+  const onCommentPosted = useCallback(() => {
+    setCommentCount((c) => c + 1);
+  }, []);
+
   return (
     <article className="pb-16">
       <PostMedia post={post} authorUserId={post.user_id} />
@@ -33,7 +37,7 @@ export default function PostDetailView({ initial }: Props) {
         commentCount={commentCount}
         hideShare={Boolean(post.hide_shares)}
       />
-      <PostComments postId={post.id} onCommentPosted={() => setCommentCount((c) => c + 1)} />
+      <PostComments postId={post.id} onCommentPosted={onCommentPosted} />
     </article>
   );
 }

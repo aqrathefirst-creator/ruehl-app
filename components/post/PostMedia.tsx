@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -41,7 +41,23 @@ export default function PostMedia({ post, authorUserId }: Props) {
   const viewerId = user?.id ?? null;
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const rawUrls = primaryMediaUrls(post);
+  const mediaUrlsSerialized = useMemo(() => {
+    const mu = post.media_urls as unknown;
+    if (Array.isArray(mu)) return mu.filter((x): x is string => typeof x === 'string').join('\x1f');
+    if (typeof mu === 'string') return mu;
+    return '';
+  }, [post.media_urls]);
+
+  const rawUrls = useMemo(
+    () => primaryMediaUrls(post),
+    [post.id, post.media_url ?? '', mediaUrlsSerialized],
+  );
+
+  const voiceRaw = useMemo(
+    () => String(post.voice_url || post.audio_url || '').trim(),
+    [post.voice_url, post.audio_url],
+  );
+
   const [urls, setUrls] = useState<string[]>([]);
   const [ix, setIx] = useState(0);
   const [voiceSrc, setVoiceSrc] = useState<string | null>(null);
@@ -62,20 +78,19 @@ export default function PostMedia({ post, authorUserId }: Props) {
   }, [rawUrls, viewerId, authorUserId]);
 
   useEffect(() => {
-    const v = String(post.voice_url || post.audio_url || '').trim();
-    if (!post.has_voice && !v) {
+    if (!post.has_voice && !voiceRaw) {
       setVoiceSrc(null);
       return;
     }
     let cancelled = false;
     void (async () => {
-      const out = await signIfOwnedPath(v, 'post-voice-private', viewerId || '', authorUserId);
-      if (!cancelled) setVoiceSrc(out || v || null);
+      const out = await signIfOwnedPath(voiceRaw, 'post-voice-private', viewerId || '', authorUserId);
+      if (!cancelled) setVoiceSrc(out || voiceRaw || null);
     })();
     return () => {
       cancelled = true;
     };
-  }, [post.has_voice, post.voice_url, post.audio_url, viewerId, authorUserId]);
+  }, [post.has_voice, voiceRaw, viewerId, authorUserId]);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
