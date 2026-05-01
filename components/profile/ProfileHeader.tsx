@@ -49,7 +49,7 @@ export default function ProfileHeader({ profile, isOwnProfile = false, showAdmin
               <VerificationBadge
                 status={profile.badge_verification_status}
                 legacyIsVerified={profile.is_verified}
-                size="sm"
+                size={16}
               />
             </h1>
             {!fullName ? (

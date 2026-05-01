@@ -81,7 +81,7 @@ export default function AuthorBlock({
             <VerificationBadge
               status={badgeStatus ?? null}
               legacyIsVerified={legacyIsVerified}
-              size="sm"
+              size={14}
             />
           </div>
           {meta ? <p className="mt-0.5 text-xs text-zinc-500">{meta}</p> : null}

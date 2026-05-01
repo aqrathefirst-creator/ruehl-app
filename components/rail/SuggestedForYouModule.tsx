@@ -75,7 +75,7 @@ export default function SuggestedForYouModule() {
                     <Link href={href} className="truncate text-sm font-semibold text-[var(--text-primary)] hover:underline">
                       @{p.username || 'user'}
                     </Link>
-                    <VerificationBadge status={p.badge_verification_status} legacyIsVerified={Boolean(p.is_verified)} size="sm" />
+                    <VerificationBadge status={p.badge_verification_status} legacyIsVerified={Boolean(p.is_verified)} size={14} />
                   </div>
                   {snippet ? <p className="mt-0.5 line-clamp-2 text-xs text-[var(--text-muted)]">{snippet}</p> : null}
                   <button

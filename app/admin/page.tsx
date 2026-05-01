@@ -1022,7 +1022,7 @@ export default function AdminPage() {
                                   <VerificationBadge
                                     status={parseBadgeStatus(r.badge_verification_status)}
                                     legacyIsVerified={Boolean(r.is_verified)}
-                                    size="sm"
+                                    size={14}
                                   />
                                   <span className="text-xs text-gray-500">
                                     {r.badge_verification_status ? String(r.badge_verification_status) : 'none'}
@@ -1096,7 +1096,7 @@ export default function AdminPage() {
                                     <div className="flex items-center gap-2">
                                       <VerificationBadge
                                         status={parseBadgeStatus(sub.profileBadgeVerificationStatus)}
-                                        size="sm"
+                                        size={14}
                                       />
                                       <span className="text-xs text-gray-500">
                                         {sub.profileBadgeVerificationStatus || 'none'}

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
 import type { IdentityPagePayload, RuehlProfilePage } from '@/lib/ruehl/queries/profileServer';
 import type { CurrentSoundDisplay } from '@/lib/ruehl/queries/profile';
-import VerifiedBadge from '@/components/profile/VerifiedBadge';
+import VerificationBadge from '@/components/profile/VerificationBadge';
 import CurrentSoundCard from '@/components/profile/CurrentSoundCard';
 import { formatCompact } from '@/lib/ruehl/formatNumber';
 
@@ -57,9 +57,9 @@ export default function IdentityView({ profile, currentSound, identity }: Props)
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[26px] font-extrabold tracking-tight">@{un}</span>
-            <VerifiedBadge
-              badgeVerificationStatus={profile.badge_verification_status}
-              isVerified={profile.is_verified}
+            <VerificationBadge
+              status={profile.badge_verification_status}
+              legacyIsVerified={profile.is_verified}
               size={16}
             />
           </div>

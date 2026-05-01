@@ -35,7 +35,7 @@ export default function SuggestionsRail({ profiles }: Props) {
                   <VerificationBadge
                     status={p.badge_verification_status}
                     legacyIsVerified={p.is_verified}
-                    size="sm"
+                    size={14}
                   />
                 </div>
               </Link>

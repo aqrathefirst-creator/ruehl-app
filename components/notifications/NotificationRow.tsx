@@ -62,7 +62,7 @@ export default function NotificationRow({ notification, onActivate }: Props) {
             <VerificationBadge
               status={notification.actor?.badge_verification_status ?? null}
               legacyIsVerified={notification.actor?.is_verified}
-              size="sm"
+              size={14}
             />
           </span>{' '}
           <span className="text-zinc-300">{action}</span>

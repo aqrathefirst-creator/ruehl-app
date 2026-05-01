@@ -1,76 +1,78 @@
 'use client';
 
 import type { BadgeVerificationStatus } from '@/lib/ruehl/accountTypes';
-import { Clock } from 'lucide-react';
-
-type Size = 'sm' | 'md' | 'lg';
-
-const SIZE_MAP: Record<Size, number> = {
-  sm: 13,
-  md: 15,
-  lg: 18,
-};
 
 type Props = {
-  status: BadgeVerificationStatus;
-  /**
-   * Legacy compatibility: when `badge_verification_status` is null but `profiles.is_verified` is still true (prod rows not migrated).
-   * Remove this prop after all profiles expose `badge_verification_status`.
-   */
+  /** Direct verified state. When `false`, badge never renders. */
+  isVerified?: boolean;
+  /** Derives visibility from `badge_verification_status === 'approved'`. */
+  status?: BadgeVerificationStatus | string | null;
+  /** Legacy `profiles.is_verified` when status column is unset. */
   legacyIsVerified?: boolean | null;
-  size?: Size;
+  /** Pixel size (native uses 12 / 14 / 16). Default 16 — ProfileScreen header. */
+  size?: number;
+  /** Maps to 12 / 14 / 16 when `size` is omitted. */
+  sizeKey?: 'sm' | 'md' | 'lg';
+  className?: string;
 };
 
-function resolveDisplayStatus(
-  status: BadgeVerificationStatus,
-  legacyIsVerified?: boolean | null,
-): 'approved' | 'pending' | null {
-  if (status === 'approved' || status === 'pending') return status;
-  if (status === 'rejected') return null;
-  if ((status === null || status === undefined) && legacyIsVerified === true) return 'approved';
-  return null;
+const SIZE_MAP = {
+  sm: 12,
+  md: 14,
+  lg: 16,
+} as const;
+
+/** Matches native `isUserVerified`: only approved accounts show the badge (no pending clock). */
+function shouldShowVerifiedBadge(
+  isVerified: boolean | undefined,
+  status: BadgeVerificationStatus | string | null | undefined,
+  legacyIsVerified: boolean | null | undefined,
+): boolean {
+  if (isVerified === false) return false;
+  if (isVerified === true) return true;
+
+  const s = status as BadgeVerificationStatus | null | undefined;
+  if (s === 'approved') return true;
+  if (s === 'pending' || s === 'rejected') return false;
+  if ((s === null || s === undefined) && legacyIsVerified === true) return true;
+  return false;
 }
 
 /**
- * Data-driven verification badge — prefers `profiles.badge_verification_status`.
- * Approved: blue check (accent-verify). Pending: gray clock. Null/rejected: nothing unless legacy {@link Props.legacyIsVerified} applies.
+ * Canonical verified badge — brand violet `#a855f7`, matching native `Ionicons` checkmark-circle.
+ * Renders nothing unless verified (approved); no pending/rejected glyph.
  */
-export default function VerificationBadge({ status, legacyIsVerified, size = 'md' }: Props) {
-  const px = SIZE_MAP[size];
-  const display = resolveDisplayStatus(status, legacyIsVerified);
+export default function VerificationBadge({
+  isVerified,
+  status,
+  legacyIsVerified,
+  size,
+  sizeKey,
+  className,
+}: Props) {
+  if (!shouldShowVerifiedBadge(isVerified, status, legacyIsVerified)) return null;
 
-  if (display === 'approved') {
-    return (
-      <svg
-        className="inline-block shrink-0 align-middle"
-        style={{ width: px, height: px }}
-        viewBox="0 0 16 16"
-        role="img"
-        aria-label="Verified"
-      >
-        <circle cx="8" cy="8" r="8" fill="#4FC3F7" />
-        <path
-          d="M4.8 8.15 6.85 10.2 11.25 5.8"
-          fill="none"
-          stroke="#FFFFFF"
-          strokeWidth="1.85"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  }
+  const px = size ?? (sizeKey ? SIZE_MAP[sizeKey] : 16);
 
-  if (display === 'pending') {
-    return (
-      <Clock
-        className="inline-block shrink-0 align-middle text-[var(--text-muted)]"
-        style={{ width: px, height: px }}
-        aria-label="Verification pending"
-        strokeWidth={2}
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      width={px}
+      height={px}
+      className={['inline-block shrink-0 align-middle', className].filter(Boolean).join(' ')}
+      aria-label="Verified"
+      role="img"
+    >
+      <circle cx="12" cy="12" r="11" fill="#a855f7" />
+      <path
+        d="M7.5 12.5l3 3 6-7"
+        stroke="#ffffff"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
       />
-    );
-  }
-
-  return null;
+    </svg>
+  );
 }

@@ -29,7 +29,7 @@ export default function VerificationStatusCard({ submission }: Props) {
         <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-blue-400">Verified</div>
         <h2 className="mb-2 flex flex-wrap items-center gap-2 text-xl font-bold text-white">
           Your account is verified{' '}
-          <VerificationBadge status="approved" size="md" />
+          <VerificationBadge status="approved" size={16} />
         </h2>
         <p className="text-zinc-400">The verified badge appears next to your username across Ruehl.</p>
         {reviewed_at ? (

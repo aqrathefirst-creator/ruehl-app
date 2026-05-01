@@ -49,7 +49,7 @@ function EchoRow({ echo }: { echo: DropEchoListItem }) {
             <VerificationBadge
               status={author?.badge_verification_status ?? null}
               legacyIsVerified={author?.is_verified}
-              size="sm"
+              size={14}
             />
           </div>
           {echo.durationSeconds > 0 ? (

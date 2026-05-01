@@ -107,7 +107,7 @@ export default function ProfileViewHeader({
           <VerificationBadge
             status={profile.badge_verification_status}
             legacyIsVerified={profile.is_verified}
-            size="md"
+            size={16}
           />
         </div>
 

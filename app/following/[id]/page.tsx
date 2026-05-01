@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import VerificationBadge from '@/components/VerificationBadge';
+import VerificationBadge from '@/components/profile/VerificationBadge';
 
 type Profile = {
   id: string;
   username: string;
   avatar_url?: string | null;
-  verified?: boolean;
+  badge_verification_status?: string | null;
+  is_verified?: boolean | null;
 };
 
 export default function FollowingPage({ params }: { params: Promise<{ id: string }> }) {
@@ -18,7 +19,6 @@ export default function FollowingPage({ params }: { params: Promise<{ id: string
 
   const router = useRouter();
 
-  // RESOLVE PARAMS
   useEffect(() => {
     const resolveParams = async () => {
       const resolved = await params;
@@ -28,24 +28,18 @@ export default function FollowingPage({ params }: { params: Promise<{ id: string
     resolveParams();
   }, [params]);
 
-  // FETCH DATA ONLY AFTER ID EXISTS
   useEffect(() => {
     if (!userId) return;
 
     const fetchFollowing = async () => {
-      const { data: followsData } = await supabase
-        .from('follows')
-        .select('*')
-        .eq('follower_id', userId);
+      const { data: followsData } = await supabase.from('follows').select('*').eq('follower_id', userId);
 
       const { data: profilesData } = await supabase
         .from('profiles')
-        .select('id, username');
+        .select('id, username, avatar_url, badge_verification_status, is_verified');
 
       const followingProfiles =
-        followsData?.map((f) =>
-          profilesData?.find((p) => p.id === f.following_id)
-        ) || [];
+        followsData?.map((f) => profilesData?.find((p) => p.id === f.following_id)) || [];
 
       setFollowing(followingProfiles.filter(Boolean) as Profile[]);
     };
@@ -54,16 +48,15 @@ export default function FollowingPage({ params }: { params: Promise<{ id: string
   }, [userId]);
 
   return (
-    <div className="max-w-xl mx-auto p-4 space-y-6">
-
+    <div className="mx-auto max-w-xl space-y-6 p-4">
       <div className="px-2 py-4">
         <h1 className="text-3xl font-black">Following</h1>
-        <p className="text-sm text-gray-500 mt-1">People you&apos;re following</p>
+        <p className="mt-1 text-sm text-gray-500">People you&apos;re following</p>
       </div>
 
       {following.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-gray-500 text-sm">Not following anyone yet</p>
+        <div className="py-12 text-center">
+          <p className="text-sm text-gray-500">Not following anyone yet</p>
         </div>
       )}
 
@@ -71,26 +64,30 @@ export default function FollowingPage({ params }: { params: Promise<{ id: string
         {following.map((user) => (
           <button
             key={user.id}
+            type="button"
             onClick={() => router.push(`/profile/${user.id}`)}
-            className="w-full flex items-center gap-3 p-4 bg-white rounded-2xl border border-gray-200 hover:shadow-md transition-shadow"
+            className="flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 transition-shadow hover:shadow-md"
           >
             {user.avatar_url ? (
-              <img src={user.avatar_url} alt={`${user.username} avatar`} className="w-12 h-12 rounded-full object-cover" />
+              <img src={user.avatar_url} alt={`${user.username} avatar`} className="h-12 w-12 rounded-full object-cover" />
             ) : (
-              <div className="w-12 h-12 bg-gradient-to-br from-gray-300 to-gray-400 rounded-full" />
+              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-gray-300 to-gray-400" />
             )}
-            <div className="flex-1 text-left">
-              <p className="font-semibold text-gray-900 flex items-center gap-1">
-                {user.username}
-                {user.verified && <VerificationBadge />}
+            <div className="min-w-0 flex-1 text-left">
+              <p className="flex items-center gap-1 font-semibold text-gray-900">
+                <span className="truncate">{user.username}</span>
+                <VerificationBadge
+                  status={user.badge_verification_status}
+                  legacyIsVerified={user.is_verified}
+                  size={14}
+                />
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">@{user.username?.toLowerCase()}</p>
+              <p className="mt-0.5 text-xs text-gray-500">@{user.username?.toLowerCase()}</p>
             </div>
-            <span className="text-sm text-blue-600 font-medium">View</span>
+            <span className="text-sm font-medium text-blue-600">View</span>
           </button>
         ))}
       </div>
-
     </div>
   );
 }

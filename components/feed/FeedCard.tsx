@@ -146,7 +146,7 @@ export default function FeedCard({
             <Link href={profileHref} className="truncate text-sm font-semibold text-[var(--text-primary)] hover:underline">
               @{username}
             </Link>
-            <VerificationBadge status={badgeStatus} legacyIsVerified={legacyVerified} size="sm" />
+            <VerificationBadge status={badgeStatus} legacyIsVerified={legacyVerified} size={14} />
             <span className="text-xs text-[var(--text-muted)]">{formatTime(post.created_at)}</span>
           </div>
 

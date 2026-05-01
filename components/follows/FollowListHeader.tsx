@@ -21,7 +21,7 @@ export default function FollowListHeader({ profile, listType }: Props) {
         <VerificationBadge
           status={profile.badge_verification_status ?? null}
           legacyIsVerified={profile.is_verified}
-          size="md"
+          size={14}
         />
       </h1>
       <p className="mt-1 text-zinc-400">{listType === 'followers' ? 'Followers' : 'Following'}</p>
