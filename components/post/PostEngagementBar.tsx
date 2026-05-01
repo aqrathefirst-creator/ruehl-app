@@ -11,6 +11,8 @@ type Props = {
   onLiftCountChange: Dispatch<SetStateAction<number>>;
   commentCount: number;
   hideShare?: boolean;
+  /** Inside detail card — no outer margin or full-width borders */
+  embedded?: boolean;
 };
 
 export default function PostEngagementBar({
@@ -19,6 +21,7 @@ export default function PostEngagementBar({
   onLiftCountChange,
   commentCount,
   hideShare,
+  embedded,
 }: Props) {
   const [lifted, setLifted] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -97,12 +100,21 @@ export default function PostEngagementBar({
   };
 
   return (
-    <div className="relative mt-6 flex items-center justify-around border-y border-zinc-800 py-3">
+    <div
+      className={`relative flex flex-col items-stretch py-2 ${embedded ? '' : 'mt-6 border-y border-zinc-800 py-3'}`}
+    >
       {toast ? (
-        <p className="absolute -top-8 left-1/2 z-10 -translate-x-1/2 rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-200">
+        <p
+          className={`z-10 rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-200 ${
+            embedded
+              ? 'relative mx-auto mb-2 block w-fit'
+              : 'absolute -top-8 left-1/2 -translate-x-1/2'
+          }`}
+        >
           {toast}
         </p>
       ) : null}
+      <div className="flex items-center justify-around">
       <button
         type="button"
         onClick={() => void handleLift()}
@@ -134,6 +146,7 @@ export default function PostEngagementBar({
           <span className="text-[10px] uppercase tracking-wide text-zinc-500">Share</span>
         </button>
       ) : null}
+      </div>
     </div>
   );
 }

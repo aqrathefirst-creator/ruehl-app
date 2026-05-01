@@ -3,13 +3,23 @@
 import { useEffect, useState } from 'react';
 import { resolveDropMainAudioUrl } from '@/components/drop/dropAudioUrl';
 
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '';
+  const s = Math.round(seconds);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return r ? `${m}m ${r}s` : `${m}m`;
+}
+
 type Props = {
   audioPath: string;
   audioVisibility: 'public' | 'private';
   durationSeconds: number;
+  embedded?: boolean;
 };
 
-export default function DropMedia({ audioPath, audioVisibility, durationSeconds }: Props) {
+export default function DropMedia({ audioPath, audioVisibility, durationSeconds, embedded }: Props) {
   const [src, setSrc] = useState<string | null>(null);
 
   useEffect(() => {
@@ -23,10 +33,25 @@ export default function DropMedia({ audioPath, audioVisibility, durationSeconds 
     };
   }, [audioPath, audioVisibility]);
 
-  const hint = Number.isFinite(durationSeconds) && durationSeconds > 0 ? `${Math.round(durationSeconds)}s` : '';
+  const hint = formatDuration(durationSeconds);
 
   if (!audioPath.trim()) {
     return null;
+  }
+
+  if (embedded) {
+    return (
+      <div className="space-y-2">
+        {hint ? <p className="text-xs tabular-nums text-zinc-500">{hint}</p> : null}
+        {src ? (
+          <audio src={src} controls className="w-full" preload="metadata" />
+        ) : (
+          <p className="text-sm text-zinc-500">
+            {audioVisibility === 'private' ? 'Sign in to play this drop.' : 'Audio unavailable.'}
+          </p>
+        )}
+      </div>
+    );
   }
 
   return (

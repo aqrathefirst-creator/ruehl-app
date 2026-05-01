@@ -15,13 +15,14 @@ function dropMeta(drop: Drop): string {
 type Props = {
   drop: Drop;
   author: RuehlProfile | null;
+  embedded?: boolean;
 };
 
-export default function DropAuthor({ drop, author }: Props) {
+export default function DropAuthor({ drop, author, embedded }: Props) {
   const un = String(author?.username || 'creator').replace(/^@+/, '');
 
   return (
-    <div className="border-b border-zinc-800/90 pb-4">
+    <div className={embedded ? 'pb-0' : 'border-b border-zinc-800/90 pb-4'}>
       <AuthorBlock
         username={un}
         avatarUrl={author?.avatar_url}

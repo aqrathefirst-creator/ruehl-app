@@ -4,9 +4,9 @@ import Link from 'next/link';
 import { resolvePostSound } from '@/lib/ruehl/posts';
 import type { PostDetailPost } from '@/lib/ruehl/queries/post';
 
-type Props = { post: PostDetailPost };
+type Props = { post: PostDetailPost; embedded?: boolean };
 
-export default function PostMusic({ post }: Props) {
+export default function PostMusic({ post, embedded }: Props) {
   const sound = resolvePostSound(post);
   if (!sound) return null;
 
@@ -14,7 +14,13 @@ export default function PostMusic({ post }: Props) {
   const artist = sound.artistName || 'Artist';
 
   return (
-    <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-3">
+    <div
+      className={
+        embedded
+          ? 'rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-3'
+          : 'mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-3'
+      }
+    >
       <p className="text-[10px] font-bold uppercase tracking-wider text-violet-400/80">Sound</p>
       <div className="mt-2 flex items-center justify-between gap-3">
         <div className="min-w-0">

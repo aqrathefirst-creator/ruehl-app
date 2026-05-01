@@ -11,6 +11,8 @@ import type { PostDetailPost } from '@/lib/ruehl/queries/post';
 type Props = {
   post: PostDetailPost;
   authorUserId: string;
+  /** Detail card layout — media sits flush in card strip without nested frames */
+  embedded?: boolean;
 };
 
 async function signIfOwnedPath(
@@ -36,7 +38,7 @@ async function signIfOwnedPath(
   return j.url || path;
 }
 
-export default function PostMedia({ post, authorUserId }: Props) {
+export default function PostMedia({ post, authorUserId, embedded }: Props) {
   const { user } = useUser();
   const viewerId = user?.id ?? null;
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -130,7 +132,9 @@ export default function PostMedia({ post, authorUserId }: Props) {
       className="outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60"
     >
       {current ? (
-        <div className="relative overflow-hidden rounded-2xl bg-zinc-900 ring-1 ring-zinc-800">
+        <div
+          className={`relative overflow-hidden bg-zinc-900 ${embedded ? '' : 'rounded-2xl ring-1 ring-zinc-800'}`}
+        >
           {renderKind === 'video' ? (
             <video key={current} src={current} controls className="aspect-video w-full bg-black" playsInline />
           ) : (
@@ -178,10 +182,22 @@ export default function PostMedia({ post, authorUserId }: Props) {
       ) : null}
 
       {showVoice && voiceSrc ? (
-        <div className={`rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4 ${current ? 'mt-4' : ''}`}>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-violet-400/80">Voice</p>
-          <audio src={voiceSrc} controls className="mt-3 w-full" />
-          {caption ? <p className="mt-2 text-sm text-zinc-300">{caption}</p> : null}
+        <div
+          className={
+            embedded
+              ? `px-4 py-3 ${current ? 'border-t border-zinc-800/50' : ''}`
+              : `rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4 ${current ? 'mt-4' : ''}`
+          }
+        >
+          {!embedded ? (
+            <p className="text-[10px] font-bold uppercase tracking-wider text-violet-400/80">Voice</p>
+          ) : (
+            <p className="sr-only">Voice attachment</p>
+          )}
+          <audio src={voiceSrc} controls className={`w-full ${embedded ? 'mt-0' : 'mt-3'}`} />
+          {caption ? (
+            <p className={`text-sm text-zinc-300 ${embedded ? 'mt-2' : 'mt-2'}`}>{caption}</p>
+          ) : null}
         </div>
       ) : null}
     </div>

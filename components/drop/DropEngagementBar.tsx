@@ -10,9 +10,16 @@ type Props = {
   liftCount: number;
   onLiftCountChange: Dispatch<SetStateAction<number>>;
   echoCount: number;
+  embedded?: boolean;
 };
 
-export default function DropEngagementBar({ dropId, liftCount, onLiftCountChange, echoCount }: Props) {
+export default function DropEngagementBar({
+  dropId,
+  liftCount,
+  onLiftCountChange,
+  echoCount,
+  embedded,
+}: Props) {
   const [lifted, setLifted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -90,12 +97,21 @@ export default function DropEngagementBar({ dropId, liftCount, onLiftCountChange
   };
 
   return (
-    <div className="relative mt-6 flex items-center justify-around border-y border-zinc-800 py-3">
+    <div
+      className={`relative flex flex-col items-stretch py-2 ${embedded ? '' : 'mt-6 border-y border-zinc-800 py-3'}`}
+    >
       {toast ? (
-        <p className="absolute -top-8 left-1/2 z-10 -translate-x-1/2 rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-200">
+        <p
+          className={`z-10 rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-200 ${
+            embedded
+              ? 'relative mx-auto mb-2 block w-fit'
+              : 'absolute -top-8 left-1/2 -translate-x-1/2'
+          }`}
+        >
           {toast}
         </p>
       ) : null}
+      <div className="flex items-center justify-around">
       <button
         type="button"
         onClick={() => void handleLift()}
@@ -125,6 +141,7 @@ export default function DropEngagementBar({ dropId, liftCount, onLiftCountChange
         <Share2 className="h-5 w-5" strokeWidth={2} />
         <span className="text-[10px] uppercase tracking-wide text-zinc-500">Share</span>
       </button>
+      </div>
     </div>
   );
 }

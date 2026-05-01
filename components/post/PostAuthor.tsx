@@ -18,9 +18,11 @@ import {
 type Props = {
   post: PostDetailPost;
   author: RuehlProfile | null;
+  /** When true, strip outer spacing — parent card provides padding and dividers */
+  embedded?: boolean;
 };
 
-export default function PostAuthor({ post, author }: Props) {
+export default function PostAuthor({ post, author, embedded }: Props) {
   const { user } = useUser();
   const viewerId = user?.id ?? null;
   const isOwn = Boolean(viewerId && viewerId === post.user_id);
@@ -101,7 +103,7 @@ export default function PostAuthor({ post, author }: Props) {
     ) : null;
 
   return (
-    <header className="mt-4 border-b border-zinc-800/90 pb-4">
+    <header className={embedded ? 'pb-0' : 'mt-4 border-b border-zinc-800/90 pb-4'}>
       <AuthorBlock
         username={un}
         avatarUrl={author?.avatar_url}
