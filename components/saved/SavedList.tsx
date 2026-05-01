@@ -38,34 +38,36 @@ export default function SavedList({ initial }: Props) {
     }
   }, [loading, hasMore, nextOffset]);
 
-  if (items.length === 0) {
-    return (
-      <div className="py-16 text-center text-zinc-500">
-        <p>Nothing saved yet.</p>
-        <p className="mt-2 text-sm">Save posts in the Ruehl app to see them here.</p>
-      </div>
-    );
-  }
+  const empty = items.length === 0;
 
   return (
     <>
-      <ul className="space-y-4">
-        {items.map((item, i) => (
-          <li key={`${item.post.id}-${i}`}>
-            <FeedPostCard item={item} />
-          </li>
-        ))}
-      </ul>
+      {empty ? (
+        <div className="py-16 text-center text-zinc-500">
+          <p>Nothing saved yet.</p>
+          <p className="mt-2 text-sm">Save posts in the Ruehl app to see them here.</p>
+        </div>
+      ) : (
+        <>
+          <ul className="space-y-4">
+            {items.map((item, i) => (
+              <li key={`${item.post.id}-${i}`}>
+                <FeedPostCard item={item} />
+              </li>
+            ))}
+          </ul>
 
-      {hasMore && (
-        <button
-          type="button"
-          onClick={() => void loadMore()}
-          disabled={loading}
-          className="mt-6 w-full rounded-lg bg-zinc-900 py-3 font-medium text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
-        >
-          {loading ? 'Loading…' : 'Load more'}
-        </button>
+          {hasMore ? (
+            <button
+              type="button"
+              onClick={() => void loadMore()}
+              disabled={loading}
+              className="mt-6 w-full rounded-lg bg-zinc-900 py-3 font-medium text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+            >
+              {loading ? 'Loading…' : 'Load more'}
+            </button>
+          ) : null}
+        </>
       )}
     </>
   );

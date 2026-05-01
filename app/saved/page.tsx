@@ -3,6 +3,9 @@ import SavedList from '@/components/saved/SavedList';
 import { getSavedItems } from '@/lib/ruehl/queries/saved';
 import { createServerSupabase } from '@/lib/server/supabaseServer';
 
+/** Avoid caching a signed-in shell for anonymous visitors (auth gate + SavedList stay aligned). */
+export const dynamic = 'force-dynamic';
+
 export default async function SavedPage() {
   const supabase = await createServerSupabase();
   const {
