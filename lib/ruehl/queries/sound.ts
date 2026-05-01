@@ -52,15 +52,70 @@ function mapSoundRow(row: Record<string, unknown>): SoundDetailSound {
   const usageN = Number(row.usage_count);
   const usageCount = Number.isFinite(usageN) ? Math.max(0, Math.floor(usageN)) : null;
 
+  const rawCover = row.cover_url == null ? '' : String(row.cover_url).trim();
+
   return {
     id: String(row.id),
     trackName: tn || null,
     artistName: an || null,
-    coverUrl: row.cover_url == null ? null : String(row.cover_url),
+    coverUrl: rawCover || null,
     previewUrl: row.preview_url == null ? null : String(row.preview_url),
     createdAt: row.created_at == null ? null : String(row.created_at),
     usageCount,
   };
+}
+
+/** Posts may store `sound_id` as canonical sounds.id, licensed_track_id, or user_sound_id — match all. */
+function candidateSoundIdsFromRow(row: Record<string, unknown>): string[] {
+  const ids = new Set<string>();
+  const id = String(row.id || '').trim();
+  if (id) ids.add(id);
+  const lt = row.licensed_track_id;
+  if (lt != null && String(lt).trim()) ids.add(String(lt).trim());
+  const us = row.user_sound_id;
+  if (us != null && String(us).trim()) ids.add(String(us).trim());
+  return [...ids];
+}
+
+async function resolveCoverUrl(
+  client: SupabaseClient,
+  row: Record<string, unknown>,
+  mapped: SoundDetailSound,
+): Promise<string | null> {
+  const direct = mapped.coverUrl?.trim();
+  if (direct) return direct;
+
+  const ltId = row.licensed_track_id;
+  if (ltId != null && String(ltId).trim()) {
+    const { data, error } = await client
+      .from('licensed_tracks')
+      .select('cover_url')
+      .eq('id', String(ltId).trim())
+      .limit(1);
+    if (error) {
+      if (!isMissingRelation(error)) throw error;
+    } else {
+      const url = String((data?.[0] as { cover_url?: string } | undefined)?.cover_url || '').trim();
+      if (url) return url;
+    }
+  }
+
+  const usId = row.user_sound_id;
+  if (usId != null && String(usId).trim()) {
+    const { data, error } = await client
+      .from('user_sounds')
+      .select('cover_url')
+      .eq('id', String(usId).trim())
+      .limit(1);
+    if (error) {
+      if (!isMissingRelation(error)) throw error;
+    } else {
+      const url = String((data?.[0] as { cover_url?: string } | undefined)?.cover_url || '').trim();
+      if (url) return url;
+    }
+  }
+
+  return null;
 }
 
 async function resolveSoundRow(
@@ -87,14 +142,19 @@ async function resolveSoundRow(
   return row;
 }
 
-async function fetchPostsUsingSound(client: SupabaseClient, soundId: string): Promise<SoundDetailPost[]> {
+async function fetchPostsUsingSound(
+  client: SupabaseClient,
+  candidateIds: string[],
+): Promise<SoundDetailPost[]> {
+  if (candidateIds.length === 0) return [];
+
   const cols = 'id, user_id, content, media_url, created_at, lifts_count';
   let rows: Record<string, unknown>[] = [];
 
   const vp = await client
     .from('visible_posts')
     .select(cols)
-    .eq('sound_id', soundId)
+    .in('sound_id', candidateIds)
     .order('created_at', { ascending: false })
     .limit(20);
 
@@ -103,7 +163,7 @@ async function fetchPostsUsingSound(client: SupabaseClient, soundId: string): Pr
       const p = await client
         .from('posts')
         .select(cols)
-        .eq('sound_id', soundId)
+        .in('sound_id', candidateIds)
         .order('created_at', { ascending: false })
         .limit(20);
       if (p.error) throw p.error;
@@ -147,8 +207,12 @@ export async function getSoundById(soundRouteKey: string, client: SupabaseClient
   const row = await resolveSoundRow(client, soundRouteKey);
   if (!row?.id) return null;
 
-  const sound = mapSoundRow(row);
-  const posts = await fetchPostsUsingSound(client, sound.id);
+  const base = mapSoundRow(row);
+  const coverUrl = await resolveCoverUrl(client, row, base);
+  const sound: SoundDetailSound = { ...base, coverUrl };
+
+  const candidateIds = candidateSoundIdsFromRow(row);
+  const posts = await fetchPostsUsingSound(client, candidateIds);
 
   return { sound, posts };
 }

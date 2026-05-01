@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import type { SoundDetailSound } from '@/lib/ruehl/queries/sound';
 
 type Props = {
@@ -10,12 +9,14 @@ type Props = {
 export default function SoundHeader({ sound, postCountLabel }: Props) {
   const title = sound.trackName?.trim() || 'Unknown track';
   const artist = sound.artistName?.trim() || 'Unknown artist';
+  const cover = sound.coverUrl?.trim();
 
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6">
       <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-zinc-800">
-        {sound.coverUrl ? (
-          <Image src={sound.coverUrl} alt="" fill className="object-cover" unoptimized sizes="80px" />
+        {cover ? (
+          // eslint-disable-next-line @next/next/no-img-element -- remote CDN URLs; avoids remotePatterns setup
+          <img src={cover} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-2xl text-zinc-500">♪</div>
         )}
