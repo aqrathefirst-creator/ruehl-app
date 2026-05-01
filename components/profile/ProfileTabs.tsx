@@ -7,14 +7,15 @@ import {
   getDropsByUser,
   getEchoesByUser,
   getLiftedPostsByUser,
+  type LiftedPostForProfile,
   type ProfileDropRow,
   type ProfileDropEchoRow,
 } from '@/lib/ruehl/queries/profileTabs';
-import type { RuehlPost } from '@/lib/ruehl/types';
 import PowrPostCard from '@/components/profile/cards/PowrPostCard';
 import DropCard from '@/components/profile/cards/DropCard';
 import EchoCard from '@/components/profile/cards/EchoCard';
 import LiftedItemCard from '@/components/profile/cards/LiftedItemCard';
+import type { RuehlPost } from '@/lib/ruehl/types';
 
 export type ProfileSurfaceTab = 'powr' | 'drops' | 'echoes' | 'lifts';
 
@@ -38,7 +39,7 @@ export default function ProfileTabs({ profile, canViewTabs }: Props) {
   const [powr, setPowr] = useState<RuehlPost[] | null>(null);
   const [drops, setDrops] = useState<ProfileDropRow[] | null>(null);
   const [echoes, setEchoes] = useState<ProfileDropEchoRow[] | null>(null);
-  const [lifted, setLifted] = useState<RuehlPost[] | null>(null);
+  const [lifted, setLifted] = useState<LiftedPostForProfile[] | null>(null);
 
   const loadSeq = useRef(0);
 
@@ -139,7 +140,18 @@ export default function ProfileTabs({ profile, canViewTabs }: Props) {
         {!loading &&
           active === 'powr' &&
           readyTab === 'powr' &&
-          (powr?.length ? powr.map((p) => <PowrPostCard key={p.id} post={p} />) : null)}
+          (powr?.length
+            ? powr.map((p) => (
+                <PowrPostCard
+                  key={p.id}
+                  post={p}
+                  profileUsername={profile.username}
+                  profileAvatarUrl={profile.avatar_url}
+                  profileBadgeStatus={profile.badge_verification_status}
+                  profileIsVerified={profile.is_verified}
+                />
+              ))
+            : null)}
         {!loading && active === 'powr' && readyTab === 'powr' && powr?.length === 0 ? (
           <p className="px-2 text-center text-sm text-zinc-500">No POWR posts yet.</p>
         ) : null}
@@ -147,7 +159,18 @@ export default function ProfileTabs({ profile, canViewTabs }: Props) {
         {!loading &&
           active === 'drops' &&
           readyTab === 'drops' &&
-          (drops?.length ? drops.map((d) => <DropCard key={d.id} drop={d} />) : null)}
+          (drops?.length
+            ? drops.map((d) => (
+                <DropCard
+                  key={d.id}
+                  drop={d}
+                  profileUsername={profile.username}
+                  profileAvatarUrl={profile.avatar_url}
+                  profileBadgeStatus={profile.badge_verification_status}
+                  profileIsVerified={profile.is_verified}
+                />
+              ))
+            : null)}
         {!loading && active === 'drops' && readyTab === 'drops' && drops?.length === 0 ? (
           <p className="px-2 text-center text-sm text-zinc-500">No drops yet.</p>
         ) : null}
@@ -155,7 +178,18 @@ export default function ProfileTabs({ profile, canViewTabs }: Props) {
         {!loading &&
           active === 'echoes' &&
           readyTab === 'echoes' &&
-          (echoes?.length ? echoes.map((d) => <EchoCard key={d.id} echo={d} />) : null)}
+          (echoes?.length
+            ? echoes.map((d) => (
+                <EchoCard
+                  key={d.id}
+                  echo={d}
+                  profileUsername={profile.username}
+                  profileAvatarUrl={profile.avatar_url}
+                  profileBadgeStatus={profile.badge_verification_status}
+                  profileIsVerified={profile.is_verified}
+                />
+              ))
+            : null)}
         {!loading && active === 'echoes' && readyTab === 'echoes' && echoes?.length === 0 ? (
           <p className="px-2 text-center text-sm text-zinc-500">No echoes yet.</p>
         ) : null}

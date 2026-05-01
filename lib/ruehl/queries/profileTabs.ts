@@ -2,6 +2,7 @@
  * Profile tab grids for `/[username]` — mirrors native `ProfileScreen` tab data paths (read-only).
  */
 
+import type { BadgeVerificationStatus } from '@/lib/ruehl/accountTypes';
 import { supabase } from '@/lib/supabase';
 import type { RuehlPost } from '@/lib/ruehl/types';
 import { isPowrPost, normalizePost } from '@/lib/ruehl/posts';
@@ -60,7 +61,34 @@ export async function getEchoesByUser(userId: string, limit = 20): Promise<Profi
   return (data || []) as ProfileDropEchoRow[];
 }
 
-export async function getLiftedPostsByUser(userId: string, limit = 20): Promise<RuehlPost[]> {
+export type LiftedPostForProfile = RuehlPost & {
+  authorUsername: string | null;
+  authorAvatarUrl: string | null;
+  authorBadgeVerificationStatus: BadgeVerificationStatus;
+  authorIsVerified: boolean | null;
+};
+
+function profileFromPostRow(row: Record<string, unknown>): {
+  username: string | null;
+  avatarUrl: string | null;
+  badge: BadgeVerificationStatus;
+  verified: boolean | null;
+} {
+  const raw = row.profiles;
+  const p = Array.isArray(raw) ? raw[0] : raw;
+  if (!p || typeof p !== 'object') {
+    return { username: null, avatarUrl: null, badge: null, verified: null };
+  }
+  const o = p as Record<string, unknown>;
+  return {
+    username: typeof o.username === 'string' ? o.username : null,
+    avatarUrl: typeof o.avatar_url === 'string' ? o.avatar_url : null,
+    badge: (o.badge_verification_status as BadgeVerificationStatus) ?? null,
+    verified: typeof o.is_verified === 'boolean' ? o.is_verified : null,
+  };
+}
+
+export async function getLiftedPostsByUser(userId: string, limit = 20): Promise<LiftedPostForProfile[]> {
   const { data: lifts, error: liftErr } = await supabase
     .from('post_lifts')
     .select('post_id, created_at')
@@ -71,8 +99,36 @@ export async function getLiftedPostsByUser(userId: string, limit = 20): Promise<
   const ids = [...new Set((lifts || []).map((l: { post_id?: string }) => l.post_id).filter(Boolean))] as string[];
   if (ids.length === 0) return [];
   const slice = ids.slice(0, limit);
-  const { data, error } = await supabase.from('posts').select('*').in('id', slice);
+  const { data, error } = await supabase
+    .from('posts')
+    .select(
+      `
+      *,
+      profiles (
+        username,
+        avatar_url,
+        badge_verification_status,
+        is_verified
+      )
+    `,
+    )
+    .in('id', slice);
   if (error) throw error;
   const byId = new Map((data || []).map((r) => [(r as { id: string }).id, r as Record<string, unknown>]));
-  return slice.map((id) => byId.get(id)).filter(Boolean).map((r) => rowToRuehlPost(r!));
+  return slice
+    .map((id) => byId.get(id))
+    .filter(Boolean)
+    .map((raw) => {
+      const row = raw as Record<string, unknown>;
+      const { profiles: _prof, ...rest } = row;
+      const post = rowToRuehlPost(rest);
+      const pr = profileFromPostRow(row);
+      return {
+        ...post,
+        authorUsername: pr.username,
+        authorAvatarUrl: pr.avatarUrl,
+        authorBadgeVerificationStatus: pr.badge,
+        authorIsVerified: pr.verified,
+      };
+    });
 }
