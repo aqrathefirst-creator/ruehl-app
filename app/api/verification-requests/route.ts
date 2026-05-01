@@ -1,5 +1,6 @@
 import { requireUser } from '@/lib/server/supabase';
 import { jsonError, jsonOk } from '@/lib/server/responses';
+import { mapVerificationSubmissionRow } from '@/lib/ruehl/queries/verificationServer';
 
 /**
  * User-facing verification submissions (`verification_submissions`).
@@ -51,9 +52,31 @@ export async function POST(request: Request) {
   }
   if (!documentPath || documentPath.length < 4) {
     return jsonError(
-      'document_path is required — upload a document to the verification-documents bucket first',
+      'document_path is required — upload document(s) to the verification-documents bucket first',
       400,
     );
+  }
+
+  const { data: pendingRow } = await auth.supabase
+    .from('verification_submissions')
+    .select('id')
+    .eq('user_id', auth.user.id)
+    .eq('status', 'pending')
+    .maybeSingle();
+
+  if (pendingRow?.id) {
+    return jsonError('A submission is already under review', 409);
+  }
+
+  const { data: approvedRow } = await auth.supabase
+    .from('verification_submissions')
+    .select('id')
+    .eq('user_id', auth.user.id)
+    .eq('status', 'approved')
+    .maybeSingle();
+
+  if (approvedRow?.id) {
+    return jsonError('Your account is already verified', 409);
   }
 
   const { data, error } = await auth.supabase
@@ -69,11 +92,12 @@ export async function POST(request: Request) {
       status: 'pending',
     })
     .select(
-      'id, user_id, account_type, account_subtype, legal_entity_name, website_url, user_notes, document_path, status, submitted_at',
+      'id, user_id, account_type, account_subtype, legal_entity_name, website_url, user_notes, document_path, status, rejection_reason, submitted_at, reviewed_at, reviewed_by',
     )
     .single();
 
   if (error) return jsonError(error.message, 400);
 
-  return jsonOk({ item: data }, 201);
+  const item = mapVerificationSubmissionRow(data as Record<string, unknown>);
+  return jsonOk({ item }, 201);
 }

@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import DeleteAccountSection from '@/components/settings/DeleteAccountSection';
 import { supabase } from '@/lib/supabase';
+import { getVerificationStatusLabel, parseVerificationStatus } from '@/lib/ruehl/verification';
 
 type Settings = {
   id: string;
@@ -26,12 +28,10 @@ type ActivitySummary = {
   matches: Array<{ id: string; status: string; created_at: string }>;
 };
 
-type VerificationRequest = {
+type VerificationListItem = {
   id: string;
-  full_name: string;
-  reason: string;
-  status: 'pending' | 'approved' | 'rejected';
-  created_at: string;
+  status: string;
+  submitted_at: string;
 };
 
 type BlockedUserItem = {
@@ -75,15 +75,13 @@ export default function SettingsPage() {
 
   const [settings, setSettings] = useState<Settings | null>(null);
   const [activity, setActivity] = useState<ActivitySummary | null>(null);
-  const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
+  const [verificationItems, setVerificationItems] = useState<VerificationListItem[]>([]);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUserItem[]>([]);
 
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [verificationName, setVerificationName] = useState('');
-  const [verificationReason, setVerificationReason] = useState('');
   const [blockUserId, setBlockUserId] = useState('');
 
   const [loading, setLoading] = useState(true);
@@ -106,7 +104,7 @@ export default function SettingsPage() {
 
       setSettings(settingsRes.settings as Settings);
       setActivity(activityRes as ActivitySummary);
-      setVerificationRequests((verificationRes.items || []) as VerificationRequest[]);
+      setVerificationItems((verificationRes.items || []) as VerificationListItem[]);
       setBlockedUsers((blockedRes.items || []) as BlockedUserItem[]);
 
       setUsername(settingsRes.settings.username || '');
@@ -174,32 +172,6 @@ export default function SettingsPage() {
       setSuccess('Settings updated.');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to update settings'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const submitVerification = async () => {
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      await withAuthFetch('/api/verification-requests', {
-        method: 'POST',
-        body: JSON.stringify({
-          full_name: verificationName,
-          reason: verificationReason,
-          social_links: {},
-        }),
-      });
-
-      setVerificationName('');
-      setVerificationReason('');
-      setSuccess('Verification request submitted.');
-      await loadData();
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to submit verification request'));
     } finally {
       setSaving(false);
     }
@@ -414,19 +386,21 @@ export default function SettingsPage() {
 
         <section className="rounded-2xl border border-white/10 bg-[#0E0E0E] p-4 space-y-3">
           <h2 className="text-lg font-bold">Verification</h2>
-          <div className="text-sm text-gray-400">Current status: {settings?.is_verified ? 'Verified' : 'Not verified'}</div>
-          <input value={verificationName} onChange={(e) => setVerificationName(e.target.value)} placeholder="Full name" className="w-full rounded-lg bg-black/60 border border-white/10 px-3 py-2 text-sm" />
-          <textarea value={verificationReason} onChange={(e) => setVerificationReason(e.target.value)} placeholder="Reason for verification" rows={3} className="w-full rounded-lg bg-black/60 border border-white/10 px-3 py-2 text-sm resize-none" />
-          <button disabled={saving} onClick={submitVerification} className="w-full h-11 rounded-full bg-white/10 border border-white/20 text-sm font-semibold disabled:opacity-50">Submit verification request</button>
-          {verificationRequests.length > 0 && (
-            <div className="space-y-2">
-              {verificationRequests.slice(0, 3).map((request) => (
-                <div key={request.id} className="rounded-lg bg-black/60 border border-white/10 px-3 py-2 text-xs text-gray-300">
-                  {new Date(request.created_at).toLocaleDateString()} - {request.status}
-                </div>
-              ))}
-            </div>
-          )}
+          <p className="text-sm text-gray-500">
+            Business and Media accounts can apply for a verified badge. Upload supporting documents and submit for
+            review.
+          </p>
+          <Link
+            href="/settings/verification"
+            className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/60 px-3 py-3 text-sm text-white transition hover:bg-black/80"
+          >
+            <span className="font-medium">Verify account</span>
+            <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-0.5 text-xs text-gray-300">
+              {verificationItems[0]
+                ? getVerificationStatusLabel(parseVerificationStatus(verificationItems[0].status))
+                : 'Not applied'}
+            </span>
+          </Link>
         </section>
 
         <section className="rounded-2xl border border-white/10 bg-[#0E0E0E] p-4 space-y-2">
