@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AccountTypeSection from '@/components/settings/AccountTypeSection';
 import DeleteAccountSection from '@/components/settings/DeleteAccountSection';
+import type { AccountCategory, AccountType } from '@/lib/ruehl/accountTypes';
 import { supabase } from '@/lib/supabase';
 import { getVerificationStatusLabel, parseVerificationStatus } from '@/lib/ruehl/verification';
 
@@ -14,6 +16,9 @@ type Settings = {
   avatar_url: string | null;
   /** From `public.users.is_private` (merged into settings API response) */
   is_private: boolean;
+  /** From `public.users` */
+  account_type: AccountType;
+  account_subtype: AccountCategory;
   allow_messages_from: 'everyone' | 'followers' | 'none';
   show_activity_status: boolean;
   allow_tagging: boolean;
@@ -305,6 +310,14 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        {settings && (
+          <AccountTypeSection
+            currentTier={settings.account_type}
+            currentSubtype={settings.account_subtype}
+            onUpdated={loadData}
+          />
+        )}
+
         <section className="rounded-2xl border border-white/10 bg-[#0E0E0E] p-4 space-y-3">
           <h2 className="text-lg font-bold">Activity</h2>
           <div className="grid grid-cols-2 gap-2">
@@ -404,12 +417,32 @@ export default function SettingsPage() {
           </Link>
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-[#0E0E0E] p-4 space-y-2">
+        <section className="rounded-2xl border border-white/10 bg-[#0E0E0E] p-4 space-y-3">
           <h2 className="text-lg font-bold">About</h2>
-          <p className="text-sm text-gray-400">Terms of Service</p>
-          <p className="text-sm text-gray-400">Privacy Policy</p>
-          <p className="text-sm text-gray-400">App version: {process.env.NEXT_PUBLIC_APP_VERSION || '0.1.0'}</p>
-          <p className="text-sm text-gray-400">Support: support@ruehl.app</p>
+          <div className="space-y-2">
+            <a
+              href="https://ruehl.app/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-sm text-gray-400 transition hover:text-white"
+            >
+              Terms of Service →
+            </a>
+            <a
+              href="https://ruehl.app/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-sm text-gray-400 transition hover:text-white"
+            >
+              Privacy Policy →
+            </a>
+            <a href="mailto:support@ruehl.app" className="block text-sm text-gray-400 transition hover:text-white">
+              Contact support →
+            </a>
+          </div>
+          <p className="border-t border-white/10 pt-3 text-sm text-gray-500">
+            App version: {process.env.NEXT_PUBLIC_APP_VERSION || '0.1.0'}
+          </p>
         </section>
 
         <section className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4 space-y-3">

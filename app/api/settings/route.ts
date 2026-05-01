@@ -51,14 +51,36 @@ function splitPayload(payload: SettingsPayload): {
 async function getSettingsResponse(supabase: SupabaseClient, userId: string) {
   const [{ data: profile, error: pErr }, { data: userRow }] = await Promise.all([
     supabase.from('profiles').select(PROFILE_SELECT).eq('id', userId).single(),
-    supabase.from('users').select('is_private').eq('id', userId).maybeSingle(),
+    supabase.from('users').select('is_private, account_type, account_subtype').eq('id', userId).maybeSingle(),
   ]);
 
   if (pErr) throw new Error(pErr.message);
 
-  const isPrivate = Boolean((userRow as { is_private?: boolean } | null)?.is_private);
+  const u = userRow as { is_private?: boolean; account_type?: unknown; account_subtype?: unknown } | null;
+  const isPrivate = Boolean(u?.is_private);
 
-  return { settings: { ...(profile as Record<string, unknown>), is_private: isPrivate } };
+  const rawType = String(u?.account_type ?? '').trim().toLowerCase();
+  const account_type =
+    rawType === 'personal' || rawType === 'business' || rawType === 'media' ? rawType : 'personal';
+
+  const allowedSubtype = (() => {
+    const sub = String(u?.account_subtype ?? '').trim().toLowerCase();
+    const personal = ['personal', 'creator', 'artist', 'public_figure'];
+    const business = ['brand', 'company', 'shop', 'restaurant'];
+    const media = ['radio_station', 'magazine', 'podcast', 'publication'];
+    const list =
+      account_type === 'business' ? business : account_type === 'media' ? media : personal;
+    return list.includes(sub) ? sub : list[0];
+  })();
+
+  return {
+    settings: {
+      ...(profile as Record<string, unknown>),
+      is_private: isPrivate,
+      account_type,
+      account_subtype: allowedSubtype,
+    },
+  };
 }
 
 export async function GET(request: Request) {
