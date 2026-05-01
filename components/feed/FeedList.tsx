@@ -11,7 +11,7 @@ import FeedCard from '@/components/feed/FeedCard';
 const PAGE = 15;
 
 const PROFILE_SELECT =
-  'id, username, avatar_url, bio, identity_text, badge_verification_status, is_verified, verified, created_at';
+  'id, username, full_name, avatar_url, bio, identity_text, badge_verification_status, is_verified, verified, created_at';
 
 const USERS_ACCOUNT_SELECT = 'id, account_type, account_subtype';
 
@@ -34,6 +34,7 @@ function mapProfile(r: Record<string, unknown>): RuehlProfile {
   return {
     id: String(r.id ?? ''),
     username: r.username == null ? null : String(r.username),
+    full_name: r.full_name == null ? null : String(r.full_name),
     avatar_url: r.avatar_url == null ? null : String(r.avatar_url),
     bio: r.bio == null ? null : String(r.bio),
     identity_text: r.identity_text == null ? null : String(r.identity_text),

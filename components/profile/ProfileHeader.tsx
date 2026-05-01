@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { MoreHorizontal, Settings, Shield, UserCircle } from 'lucide-react';
 import type { RuehlProfilePage } from '@/lib/ruehl/queries/profileServer';
 import VerifiedBadge from '@/components/profile/VerifiedBadge';
-import { profileDisplayName } from '@/lib/ruehl/profileDisplay';
+import { profileDisplayName, profileFullName } from '@/lib/ruehl/profileDisplay';
 
 type Props = {
   profile: RuehlProfilePage;
@@ -14,7 +14,8 @@ type Props = {
 };
 
 export default function ProfileHeader({ profile, isOwnProfile = false, showAdminIcon = false }: Props) {
-  const name = profileDisplayName(profile);
+  const handle = profileDisplayName(profile);
+  const displayNameLine = profileFullName(profile);
   const un = String(profile.username || 'user').replace(/^@+/, '');
   const initial = (un[0] || 'U').toUpperCase();
   const identityHref = `/${encodeURIComponent(un)}/identity`;
@@ -40,14 +41,16 @@ export default function ProfileHeader({ profile, isOwnProfile = false, showAdmin
             )}
           </div>
 
-          <div className="min-w-0 pt-0.5">
-            <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-white md:text-2xl">{name}</h1>
-              <VerifiedBadge
-                badgeVerificationStatus={profile.badge_verification_status}
-                isVerified={profile.is_verified}
-                size={16}
-              />
+          <div className="min-w-0 flex-1 pt-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="inline-flex flex-wrap items-center gap-2 text-xl font-bold tracking-tight text-white md:text-2xl">
+                <span>@{handle}</span>
+                <VerifiedBadge
+                  badgeVerificationStatus={profile.badge_verification_status}
+                  isVerified={profile.is_verified}
+                  size={16}
+                />
+              </h1>
               <Link
                 href={identityHref}
                 className="text-zinc-400 transition hover:text-white"
@@ -57,7 +60,9 @@ export default function ProfileHeader({ profile, isOwnProfile = false, showAdmin
                 <UserCircle className="h-[18px] w-[18px] md:h-5 md:w-5" strokeWidth={1.75} />
               </Link>
             </div>
-            <p className="mt-0.5 text-sm font-medium text-[#a855f7]">@{un}</p>
+            {displayNameLine ? (
+              <div className="mt-0.5 text-base font-normal text-zinc-300">{displayNameLine}</div>
+            ) : null}
           </div>
         </div>
 

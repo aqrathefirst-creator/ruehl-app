@@ -76,6 +76,8 @@ function mapProfileRow(p: Record<string, unknown>): RuehlProfile {
   return {
     id: String(p.id ?? ''),
     username: typeof p.username === 'string' ? p.username : p.username == null ? null : String(p.username),
+    full_name:
+      typeof p.full_name === 'string' ? p.full_name : p.full_name == null ? null : String(p.full_name),
     avatar_url: typeof p.avatar_url === 'string' ? p.avatar_url : p.avatar_url == null ? null : String(p.avatar_url),
     bio: typeof p.bio === 'string' ? p.bio : p.bio == null ? null : String(p.bio),
     identity_text:

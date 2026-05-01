@@ -24,7 +24,7 @@ function isUuid(value: string): boolean {
 
 /** `account_type` and `account_subtype` live on `public.users`, not `profiles`. */
 const PROFILE_SELECT =
-  'id, username, avatar_url, bio, identity_text, badge_verification_status, contact_email, contact_phone, website, display_category_label, display_contact_info, category_picked_at, is_verified, created_at';
+  'id, username, full_name, avatar_url, bio, identity_text, badge_verification_status, contact_email, contact_phone, website, display_category_label, display_contact_info, category_picked_at, is_verified, created_at';
 
 /** Account tier + subtype: SELECT on `public.users` (column grants). */
 const USERS_SELECT =
@@ -85,6 +85,7 @@ export function mapProfileRow(p: Record<string, unknown>, u: Record<string, unkn
   return {
     id: String(p.id ?? ''),
     username: pickStr('username'),
+    full_name: pickStr('full_name'),
     avatar_url: pickStr('avatar_url'),
     bio: pickStr('bio'),
     identity_text: pickStr('identity_text'),
