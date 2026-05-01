@@ -65,7 +65,7 @@ function mapSoundRow(row: Record<string, unknown>): SoundDetailSound {
   };
 }
 
-/** Posts may store `sound_id` as canonical sounds.id, licensed_track_id, or user_sound_id — match all. */
+/** Candidate ids from the `sounds` row (generic id + linked licensed / user sound FKs). */
 function candidateSoundIdsFromRow(row: Record<string, unknown>): string[] {
   const ids = new Set<string>();
   const id = String(row.id || '').trim();
@@ -75,6 +75,43 @@ function candidateSoundIdsFromRow(row: Record<string, unknown>): string[] {
   const us = row.user_sound_id;
   if (us != null && String(us).trim()) ids.add(String(us).trim());
   return [...ids];
+}
+
+/**
+ * PostgREST OR: any of the four post FK columns may hold the reference (most licensed posts use
+ * `licensed_track_id` with `sound_id` null).
+ */
+function buildSoundPostOrFilter(candidateIds: string[]): string {
+  const ids = [...new Set(candidateIds.map((x) => String(x).trim()).filter(Boolean))];
+  if (ids.length === 0) return '';
+  const csv = ids.join(',');
+  return [
+    `sound_id.in.(${csv})`,
+    `licensed_track_id.in.(${csv})`,
+    `user_sound_id.in.(${csv})`,
+    `ruehl_sound_id.in.(${csv})`,
+  ].join(',');
+}
+
+function dedupePostsByIdNewestFirst(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const r of rows) {
+    const id = String(r.id || '');
+    if (!id) continue;
+    const prev = byId.get(id);
+    if (!prev) {
+      byId.set(id, r);
+      continue;
+    }
+    const tPrev = new Date(String(prev.created_at || 0)).getTime();
+    const tNew = new Date(String(r.created_at || 0)).getTime();
+    if (Number.isFinite(tNew) && (!Number.isFinite(tPrev) || tNew >= tPrev)) {
+      byId.set(id, r);
+    }
+  }
+  return [...byId.values()].sort(
+    (a, b) => new Date(String(b.created_at || 0)).getTime() - new Date(String(a.created_at || 0)).getTime(),
+  );
 }
 
 async function resolveCoverUrl(
@@ -134,12 +171,13 @@ async function fetchPostsUsingSound(
   if (candidateIds.length === 0) return [];
 
   const cols = 'id, user_id, content, media_url, created_at, lifts_count';
+  const orFilter = buildSoundPostOrFilter(candidateIds);
   let rows: Record<string, unknown>[] = [];
 
   const vp = await client
     .from('visible_posts')
     .select(cols)
-    .in('sound_id', candidateIds)
+    .or(orFilter)
     .order('created_at', { ascending: false })
     .limit(20);
 
@@ -148,16 +186,16 @@ async function fetchPostsUsingSound(
       const p = await client
         .from('posts')
         .select(cols)
-        .in('sound_id', candidateIds)
+        .or(orFilter)
         .order('created_at', { ascending: false })
         .limit(20);
       if (p.error) throw p.error;
-      rows = (p.data || []) as Record<string, unknown>[];
+      rows = dedupePostsByIdNewestFirst((p.data || []) as Record<string, unknown>[]);
     } else {
       throw vp.error;
     }
   } else {
-    rows = (vp.data || []) as Record<string, unknown>[];
+    rows = dedupePostsByIdNewestFirst((vp.data || []) as Record<string, unknown>[]);
   }
 
   const userIds = [...new Set(rows.map((r) => String(r.user_id || '')).filter(Boolean))];
