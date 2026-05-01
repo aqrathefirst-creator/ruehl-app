@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Settings, Shield } from 'lucide-react';
+import { Compass, Home, Settings, Shield } from 'lucide-react';
 
 export type NavItemDef = {
   href: string;
@@ -13,6 +13,12 @@ export type NavItemDef = {
 
 export const TOP_BAR_NAV_ITEMS: NavItemDef[] = [
   { label: 'Home', href: '/', icon: Home, match: (pathname) => pathname === '/' },
+  {
+    label: 'Explore',
+    href: '/explore',
+    icon: Compass,
+    match: (pathname) => pathname === '/explore' || pathname.startsWith('/explore/'),
+  },
 ];
 
 type Props = {

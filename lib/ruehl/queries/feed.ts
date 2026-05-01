@@ -3,6 +3,7 @@
  * Uses `posts` denormalized music fields + `licensed_tracks` for artwork; avoids legacy `sounds` table column lists.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { RuehlPost, RuehlProfile } from '@/lib/ruehl/types';
 import { normalizePost, resolvePostSound, type PostSoundInput } from '@/lib/ruehl/posts';
@@ -346,17 +347,24 @@ export async function getTrendingSounds(limit: number): Promise<TrendingSound[]>
   }
 }
 
-export async function getSuggestedProfiles(currentUserId: string | null, lim: number): Promise<RuehlProfile[]> {
+export async function getSuggestedProfiles(
+  currentUserId: string | null,
+  lim: number,
+  client?: SupabaseClient,
+): Promise<RuehlProfile[]> {
   try {
-    if (!currentUserId) return [];
+    const db = client ?? supabase;
 
-    const [{ data: posts }, { data: follows }] = await Promise.all([
-      supabase.from('posts').select('*').order('created_at', { ascending: false }).limit(450),
-      supabase.from('follows').select('following_id').eq('follower_id', currentUserId),
-    ]);
+    const following = new Set<string>();
+    if (currentUserId) {
+      following.add(currentUserId);
+      const { data: follows } = await db.from('follows').select('following_id').eq('follower_id', currentUserId);
+      for (const f of follows || []) {
+        if ((f as { following_id?: string }).following_id) following.add(String((f as { following_id: string }).following_id));
+      }
+    }
 
-    const following = new Set<string>((follows || []).map((f) => f.following_id).filter(Boolean));
-    following.add(currentUserId);
+    const { data: posts } = await db.from('posts').select('*').order('created_at', { ascending: false }).limit(450);
 
     const normalized = ((posts || []) as Record<string, unknown>[]).map((r) => normalizePost(r) as RuehlPost);
     const boost = buildCreatorBoostByUserId(normalized, postEngagementScore);
@@ -370,8 +378,8 @@ export async function getSuggestedProfiles(currentUserId: string | null, lim: nu
     if (sortedIds.length === 0) return [];
 
     const [{ data: profRows, error }, { data: userRows, error: userErr }] = await Promise.all([
-      supabase.from('profiles').select(PROFILE_RAIL_SELECT).in('id', sortedIds),
-      supabase.from('users').select(USERS_RAIL_ACCOUNT_SELECT).in('id', sortedIds),
+      db.from('profiles').select(PROFILE_RAIL_SELECT).in('id', sortedIds),
+      db.from('users').select(USERS_RAIL_ACCOUNT_SELECT).in('id', sortedIds),
     ]);
     if (error) {
       logFeedError('getSuggestedProfiles profiles', error);

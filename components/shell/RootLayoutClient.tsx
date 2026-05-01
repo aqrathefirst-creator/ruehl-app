@@ -11,9 +11,14 @@ import { hasActiveCreateUpload } from '@/lib/createUploadQueue';
 /** Auth-only pages (no app shell). Marketing home `/` is anonymous-OK but uses shell when signed in. */
 const STRICT_PUBLIC = new Set(['/login', '/admin/login', '/reset-password', '/verify-account']);
 
+function isExplorePath(path: string | null): boolean {
+  const p = path || '';
+  return p === '/explore' || p.startsWith('/explore/');
+}
+
 function allowsAnonymousVisit(path: string | null): boolean {
   const p = path || '';
-  return p === '/' || STRICT_PUBLIC.has(p);
+  return p === '/' || STRICT_PUBLIC.has(p) || isExplorePath(p);
 }
 
 export default function RootLayoutClient({ children }: { children: React.ReactNode }) {
@@ -120,8 +125,11 @@ export default function RootLayoutClient({ children }: { children: React.ReactNo
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
 
+  const onExploreAnonymous = !isAuthenticated && isExplorePath(pathname || null);
   const showShell =
-    isAuthenticated && isVerified && !STRICT_PUBLIC.has(pathname || '') && !isCreateRoute;
+    (onExploreAnonymous || (isAuthenticated && isVerified)) &&
+    !STRICT_PUBLIC.has(pathname || '') &&
+    !isCreateRoute;
 
   return (
     <>
