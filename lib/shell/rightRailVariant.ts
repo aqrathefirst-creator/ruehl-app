@@ -30,7 +30,7 @@ const RESERVED_USERNAME_SEGMENTS = new Set([
 export function deriveRightRailVariant(pathname: string): RightRailVariant {
   const p = pathname.split('?')[0] || '/';
 
-  if (p === '/' || p === '/now') return 'home';
+  if (p === '/' || p === '/now' || p === '/notifications') return 'home';
   if (p.startsWith('/profile/')) return 'profile';
 
   const soundMatch = /^\/sound\/([^/]+)\/?$/.exec(p);

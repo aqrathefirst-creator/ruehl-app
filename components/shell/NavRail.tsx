@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Compass, Flame, Home, Settings, Shield, UserRound } from 'lucide-react';
+import { Bell, Compass, Flame, Home, Settings, Shield, UserRound } from 'lucide-react';
 
 export type RailNavItem = {
   key: string;
@@ -27,6 +27,13 @@ export const RAIL_ITEMS: RailNavItem[] = [
     href: '/explore',
     icon: Compass,
     match: (p) => p === '/explore' || p.startsWith('/explore/'),
+  },
+  {
+    key: 'notifications',
+    label: 'Notifications',
+    href: '/notifications',
+    icon: Bell,
+    match: (p) => p === '/notifications' || p.startsWith('/notifications/'),
   },
 ];
 

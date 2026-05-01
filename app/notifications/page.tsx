@@ -1,14 +1,25 @@
-'use client';
+import { redirect } from 'next/navigation';
+import { createServerSupabase } from '@/lib/server/supabaseServer';
+import { getNotifications } from '@/lib/ruehl/queries/notifications';
+import NotificationsInbox from '@/components/notifications/NotificationsInbox';
 
-export default function NotificationsPage() {
+export default async function NotificationsPage() {
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    redirect('/login');
+  }
+
+  const initial = await getNotifications(user.id, 0, 30, supabase);
+
   return (
-    <div className="mx-auto w-full max-w-[600px] px-4 pb-24 pt-4 md:pt-6">
-      <section className="rounded-[var(--radius-card)] border border-[var(--border-subtle)] bg-[var(--bg-secondary)] px-6 py-10">
-        <h1 className="text-2xl font-black tracking-tight text-[var(--text-primary)]">Notifications</h1>
-        <p className="mt-3 text-sm text-[var(--text-muted)]">
-          Notifications will appear here. Full notifications experience ships in a future update.
-        </p>
-      </section>
+    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
+      <div className="mx-auto max-w-2xl px-4 py-6">
+        <NotificationsInbox initial={initial} />
+      </div>
     </div>
   );
 }

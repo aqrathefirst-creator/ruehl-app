@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Compass, Flame, Home, Settings, Shield } from 'lucide-react';
+import { Bell, Compass, Flame, Home, Settings, Shield } from 'lucide-react';
 import { isProfileStylePath } from '@/components/shell/NavRail';
 
 export type NavItemDef = {
@@ -25,6 +25,12 @@ export const TOP_BAR_NAV_ITEMS: NavItemDef[] = [
     href: '/explore',
     icon: Compass,
     match: (pathname) => pathname === '/explore' || pathname.startsWith('/explore/'),
+  },
+  {
+    label: 'Notifications',
+    href: '/notifications',
+    icon: Bell,
+    match: (pathname) => pathname === '/notifications' || pathname.startsWith('/notifications/'),
   },
 ];
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Compass, Flame, Home, Plus, Settings } from 'lucide-react';
+import { Bell, Compass, Flame, Home, Plus, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
@@ -87,6 +87,7 @@ export default function BottomNav() {
     void router.prefetch('/');
     void router.prefetch('/now');
     void router.prefetch('/explore');
+    void router.prefetch('/notifications');
     void router.prefetch('/settings');
 
     if (typeof window === 'undefined' || !navigator.permissions?.query) return;
@@ -114,6 +115,8 @@ export default function BottomNav() {
   const isHomeActive = pathname === '/';
   const isNowActive = pathname === '/now' || (pathname || '').startsWith('/now/');
   const isExploreActive = pathname === '/explore' || (pathname || '').startsWith('/explore/');
+  const isNotificationsActive =
+    pathname === '/notifications' || (pathname || '').startsWith('/notifications/');
   const isSettingsActive = pathname?.startsWith('/settings');
 
   if (isAdminRoute) {
@@ -157,7 +160,7 @@ export default function BottomNav() {
       )}
 
       <div className="fixed bottom-4 left-1/2 z-50 flex h-[72px] w-[92%] max-w-[430px] -translate-x-1/2 items-center justify-between rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)] px-6 shadow-2xl backdrop-blur-md md:hidden">
-        <div className="flex items-center gap-4">
+        <div className="flex max-w-[52%] flex-wrap items-center justify-start gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => router.push('/')}
@@ -209,11 +212,33 @@ export default function BottomNav() {
               strokeWidth={isExploreActive ? 2.5 : 1.8}
             />
             <span
-              className={`text-[11px] ${isExploreActive ? 'font-semibold text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'}`}
+              className={`max-w-[52px] truncate text-[11px] ${isExploreActive ? 'font-semibold text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'}`}
             >
               Explore
             </span>
             {isExploreActive && (
+              <div className="absolute -bottom-1 h-1 w-1 rounded-full bg-[var(--accent-violet-bright)]" />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push('/notifications')}
+            className="relative flex flex-col items-center gap-1 transition active:scale-90"
+          >
+            <Bell
+              size={24}
+              className={
+                isNotificationsActive ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'
+              }
+              strokeWidth={isNotificationsActive ? 2.5 : 1.8}
+            />
+            <span
+              className={`max-w-[64px] truncate text-[10px] leading-tight sm:text-[11px] ${isNotificationsActive ? 'font-semibold text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)]'}`}
+            >
+              Notifications
+            </span>
+            {isNotificationsActive && (
               <div className="absolute -bottom-1 h-1 w-1 rounded-full bg-[var(--accent-violet-bright)]" />
             )}
           </button>
