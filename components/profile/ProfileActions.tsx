@@ -118,23 +118,23 @@ export default function ProfileActions({ profile }: Props) {
     }
   }, []);
 
-  const rowBtn =
-    'inline-flex min-h-[40px] flex-1 cursor-pointer items-center justify-center rounded-full border border-zinc-700 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-60';
+  const compactOwn =
+    'inline-flex cursor-pointer items-center justify-center rounded-full border border-zinc-700 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-50';
 
   if (isOwn) {
     return (
-      <div className="mx-auto flex max-w-2xl gap-2 px-4 py-3">
-        <Link href="/edit-profile" className={rowBtn}>
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2">
+        <Link href="/edit-profile" className={compactOwn}>
           Edit profile
         </Link>
-        <button type="button" onClick={handleShareProfile} className={rowBtn}>
-          Share profile
+        <button type="button" onClick={handleShareProfile} className={compactOwn}>
+          Share
         </button>
         <button
           type="button"
           disabled
           title="Analytics coming soon"
-          className={rowBtn}
+          className={`${compactOwn} opacity-50`}
           aria-disabled="true"
         >
           Analytics
@@ -144,7 +144,7 @@ export default function ProfileActions({ profile }: Props) {
   }
 
   const btnBase =
-    'inline-flex min-h-[40px] min-w-[100px] cursor-pointer items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-50';
+    'inline-flex cursor-pointer items-center justify-center rounded-full px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-50';
 
   if (blocked === 'they_blocked' || blocked === 'i_blocked') {
     return (
@@ -173,7 +173,7 @@ export default function ProfileActions({ profile }: Props) {
     followState === 'following' ? 'Following' : followState === 'requested' ? 'Requested' : 'Follow';
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-wrap gap-2 px-4 py-3">
+    <div className="flex flex-wrap items-center gap-2 px-4 py-2">
       <button
         type="button"
         onClick={() => void onFollow()}

@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import ProfileHeader from '@/components/profile/ProfileHeader';
 import ProfileStats from '@/components/profile/ProfileStats';
 import ProfileActions from '@/components/profile/ProfileActions';
+import ProfileBioBlock from '@/components/profile/ProfileBioBlock';
 import ProfileTabs from '@/components/profile/ProfileTabs';
 import {
   getCanViewPrivateTabs,
@@ -9,7 +10,6 @@ import {
   getProfileStatsRow,
   getViewerUserId,
 } from '@/lib/ruehl/queries/profileServer';
-import { getCurrentSound } from '@/lib/ruehl/queries/profile';
 import { isUserPlatformAdmin } from '@/lib/api/userAdmin';
 import { createServerSupabase } from '@/lib/server/supabaseServer';
 
@@ -24,9 +24,8 @@ export default async function UsernameProfilePage({
 
   const supabase = await createServerSupabase();
   const viewerId = await getViewerUserId();
-  const [stats, currentSound, canViewTabs] = await Promise.all([
+  const [stats, canViewTabs] = await Promise.all([
     getProfileStatsRow(profile.id),
-    getCurrentSound(profile.id, supabase),
     getCanViewPrivateTabs(profile.id, viewerId),
   ]);
 
@@ -36,14 +35,10 @@ export default async function UsernameProfilePage({
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="mx-auto max-w-2xl pb-16">
-        <ProfileHeader
-          profile={profile}
-          currentSound={currentSound}
-          isOwnProfile={isOwnProfile}
-          showAdminIcon={showAdminIcon}
-        />
-        <ProfileStats stats={stats} username={profile.username} />
+        <ProfileHeader profile={profile} isOwnProfile={isOwnProfile} showAdminIcon={showAdminIcon} />
+        <ProfileStats profile={profile} stats={stats} />
         <ProfileActions profile={profile} />
+        <ProfileBioBlock profile={profile} />
         <ProfileTabs profile={profile} canViewTabs={canViewTabs} />
       </div>
     </div>

@@ -1,56 +1,44 @@
 import Link from 'next/link';
-import type { ProfileStatsRow } from '@/lib/ruehl/queries/profileServer';
+import type { ProfileStatsRow, RuehlProfilePage } from '@/lib/ruehl/queries/profileServer';
 import { formatCompact } from '@/lib/ruehl/formatNumber';
 
 type Props = {
+  profile: RuehlProfilePage;
   stats: ProfileStatsRow;
-  /** Profile username for follow list links (no leading @). */
-  username: string | null;
 };
 
-export default function ProfileStats({ stats, username }: Props) {
-  const un = String(username || '').trim().replace(/^@+/, '');
+export default function ProfileStats({ profile, stats }: Props) {
+  const un = String(profile.username || '').trim().replace(/^@+/, '');
   const base = un ? `/${encodeURIComponent(un)}` : '';
 
   return (
-    <section
-      className="mx-auto flex max-w-2xl items-center gap-6 border-b border-zinc-800/50 px-4 py-3 sm:gap-10"
-      aria-label="Profile stats"
-    >
-      <div className="min-w-0 flex-1 text-center">
-        <div className="text-lg font-bold tabular-nums text-white sm:text-xl">{formatCompact(stats.posts)}</div>
-        <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Posts</div>
-      </div>
-
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2 text-sm" aria-label="Profile stats">
+      <span className="inline-flex items-baseline gap-1">
+        <span className="font-bold tabular-nums text-white">{formatCompact(stats.posts)}</span>
+        <span className="text-zinc-500">Posts</span>
+      </span>
       {base ? (
-        <Link
-          href={`${base}/followers`}
-          className="min-w-0 flex-1 text-center transition hover:bg-white/5 sm:rounded-lg sm:py-1"
-        >
-          <div className="text-lg font-bold tabular-nums text-white sm:text-xl">{formatCompact(stats.followers)}</div>
-          <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Followers</div>
+        <Link href={`${base}/followers`} className="inline-flex items-baseline gap-1 transition hover:text-white">
+          <span className="font-bold tabular-nums text-white">{formatCompact(stats.followers)}</span>
+          <span className="text-zinc-500">Followers</span>
         </Link>
       ) : (
-        <div className="min-w-0 flex-1 text-center">
-          <div className="text-lg font-bold tabular-nums text-white sm:text-xl">{formatCompact(stats.followers)}</div>
-          <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Followers</div>
-        </div>
+        <span className="inline-flex items-baseline gap-1">
+          <span className="font-bold tabular-nums text-white">{formatCompact(stats.followers)}</span>
+          <span className="text-zinc-500">Followers</span>
+        </span>
       )}
-
       {base ? (
-        <Link
-          href={`${base}/following`}
-          className="min-w-0 flex-1 text-center transition hover:bg-white/5 sm:rounded-lg sm:py-1"
-        >
-          <div className="text-lg font-bold tabular-nums text-white sm:text-xl">{formatCompact(stats.following)}</div>
-          <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Following</div>
+        <Link href={`${base}/following`} className="inline-flex items-baseline gap-1 transition hover:text-white">
+          <span className="font-bold tabular-nums text-white">{formatCompact(stats.following)}</span>
+          <span className="text-zinc-500">Following</span>
         </Link>
       ) : (
-        <div className="min-w-0 flex-1 text-center">
-          <div className="text-lg font-bold tabular-nums text-white sm:text-xl">{formatCompact(stats.following)}</div>
-          <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Following</div>
-        </div>
+        <span className="inline-flex items-baseline gap-1">
+          <span className="font-bold tabular-nums text-white">{formatCompact(stats.following)}</span>
+          <span className="text-zinc-500">Following</span>
+        </span>
       )}
-    </section>
+    </div>
   );
 }
