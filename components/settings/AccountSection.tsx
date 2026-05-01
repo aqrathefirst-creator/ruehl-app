@@ -108,7 +108,7 @@ export default function AccountSection() {
           type="button"
           disabled={saving}
           onClick={() => void save()}
-          className="h-11 w-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-sm font-semibold disabled:opacity-50"
+          className="h-11 w-full rounded-full bg-[#a855f7] text-sm font-semibold text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500 disabled:opacity-100"
         >
           Save account changes
         </button>

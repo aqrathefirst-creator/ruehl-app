@@ -125,7 +125,7 @@ export default function AccountTypeSection({ currentTier, currentSubtype, onUpda
         type="button"
         onClick={() => void handleSave()}
         disabled={!canSave || saving}
-        className="w-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+        className="w-full rounded-full bg-[#a855f7] py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500 disabled:opacity-100"
       >
         {saving ? 'Saving…' : 'Save account type'}
       </button>

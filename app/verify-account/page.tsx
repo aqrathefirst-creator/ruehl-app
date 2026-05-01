@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -197,6 +198,9 @@ function VerifyAccountPageContent() {
     }
   };
 
+  const codeComplete = code.trim().length === 6;
+  const canVerify = !!pending && codeComplete && !loading;
+
   const handleResend = async () => {
     resetFeedback();
 
@@ -220,62 +224,87 @@ function VerifyAccountPageContent() {
   };
 
   return (
-    <div className="flex justify-center min-h-screen bg-black">
-      <div className="w-full max-w-[430px] flex flex-col justify-center px-6 py-10 text-white">
-        <div className="mb-8 text-center">
-          <h1 className="text-5xl font-black tracking-tight text-[#a855f7]">RUEHL</h1>
-          <p className="mt-3 text-sm text-zinc-400">Verify your account to enter the app</p>
-        </div>
+    <div className="flex min-h-screen flex-col bg-black text-white">
+      <header className="flex items-center justify-between px-6 py-4">
+        <Link href="/" className="text-xl font-bold text-[#a855f7]">
+          RUEHL
+        </Link>
+      </header>
 
-        <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4 backdrop-blur">
-          <h2 className="text-xl font-semibold">Enter Verification Code</h2>
-
-          <p className="text-sm text-gray-400">
-            {maskedTarget
-              ? `We sent a 6-digit code to ${maskedTarget}.`
-              : 'We sent a 6-digit code to your signup method.'}
-          </p>
-
-          <input
-            value={code}
-            onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-            inputMode="numeric"
-            placeholder="000000"
-            className="w-full rounded-xl bg-white/10 border border-white/20 px-3 py-3 text-center tracking-[0.45em] text-lg placeholder:tracking-normal placeholder:text-gray-500"
-          />
-
-          <button
-            onClick={handleVerify}
-            disabled={loading}
-            className="w-full rounded-xl bg-[#a855f7] py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
-          >
-            {loading ? 'Please wait...' : 'Verify Account'}
-          </button>
-
-          <div className="text-center text-sm text-gray-400">
-            <button
-              type="button"
-              onClick={handleResend}
-              disabled={cooldown > 0 || loading || !pending}
-              className="text-[#a855f7] hover:underline disabled:text-gray-600 disabled:no-underline"
-            >
-              Resend code
-            </button>
-            <span className="ml-2">{cooldown > 0 ? `in ${cooldown}s` : 'now'}</span>
+      <main className="flex flex-1 flex-col items-center justify-center px-6 py-8">
+        <div className="w-full max-w-sm space-y-6">
+          <div>
+            <h1 className="mb-2 text-3xl font-bold">Verify your account</h1>
+            <p className="text-sm text-zinc-400">
+              {maskedTarget
+                ? `We sent a 6-digit code to ${maskedTarget}.`
+                : 'We sent a 6-digit code to your signup method.'}
+            </p>
           </div>
 
-          {message && (
-            <div className="rounded-lg bg-green-500/10 border border-green-500/30 text-green-300 text-xs p-2">
-              {message}
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="verify-code" className="mb-2 block text-sm text-zinc-400">
+                Verification code
+              </label>
+              <input
+                id="verify-code"
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="000000"
+                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-center font-mono text-lg tracking-[0.35em] text-white placeholder-zinc-600 placeholder:tracking-normal focus:border-zinc-700 focus:outline-none"
+              />
             </div>
-          )}
 
-          {error && (
-            <div className="rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs p-2">
-              {error}
+            <button
+              type="button"
+              onClick={handleVerify}
+              disabled={!canVerify}
+              className="w-full rounded-lg bg-[#a855f7] py-3 font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
+            >
+              {loading ? 'Please wait…' : 'Verify'}
+            </button>
+
+            <div className="text-center text-sm text-zinc-400">
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={cooldown > 0 || loading || !pending}
+                className="font-medium text-[#a855f7] hover:underline disabled:text-zinc-600 disabled:no-underline"
+              >
+                Resend code
+              </button>
+              <span className="ml-2">{cooldown > 0 ? `in ${cooldown}s` : 'now'}</span>
             </div>
-          )}
+
+            {message ? (
+              <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm text-green-300">
+                {message}
+              </div>
+            ) : null}
+
+            {error ? (
+              <div className="rounded-lg border border-red-900/50 bg-red-950/30 px-4 py-2 text-sm text-red-400">
+                {error}
+              </div>
+            ) : null}
+          </div>
         </div>
+      </main>
+
+      <footer className="px-6 py-6 text-center">
+        <p className="text-sm text-zinc-400">
+          <Link href="/login" className="font-medium text-[#a855f7] hover:underline">
+            Back to log in
+          </Link>
+        </p>
+      </footer>
+
+      <div className="mt-auto flex justify-between px-6 pb-6 text-xs text-zinc-600">
+        <span>English</span>
+        <span>© {new Date().getFullYear()} Ruehl</span>
       </div>
     </div>
   );
@@ -283,7 +312,7 @@ function VerifyAccountPageContent() {
 
 export default function VerifyAccountPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-black" aria-busy />}>
+    <Suspense fallback={<div className="min-h-screen bg-black" aria-busy="true" aria-live="polite" />}>
       <VerifyAccountPageContent />
     </Suspense>
   );

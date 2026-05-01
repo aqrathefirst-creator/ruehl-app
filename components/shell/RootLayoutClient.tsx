@@ -9,7 +9,14 @@ import { supabase } from '@/lib/supabase';
 import { hasActiveCreateUpload } from '@/lib/createUploadQueue';
 
 /** Auth-only pages (no app shell). Marketing home `/` is anonymous-OK but uses shell when signed in. */
-const STRICT_PUBLIC = new Set(['/login', '/admin/login', '/reset-password', '/verify-account']);
+const STRICT_PUBLIC = new Set([
+  '/login',
+  '/signup',
+  '/forgot-password',
+  '/admin/login',
+  '/reset-password',
+  '/verify-account',
+]);
 
 function isExplorePath(path: string | null): boolean {
   const p = path || '';
@@ -80,7 +87,7 @@ export default function RootLayoutClient({ children }: { children: React.ReactNo
         return;
       }
 
-      if (verified && pathname === '/login') {
+      if (verified && (pathname === '/login' || pathname === '/signup')) {
         router.replace('/');
       }
     };
