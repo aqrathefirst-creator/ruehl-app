@@ -140,10 +140,8 @@ export default function AdminLoginPage() {
     <div className="min-h-screen bg-black flex justify-center text-white">
       <div className="w-full max-w-[430px] px-6 py-12 flex flex-col justify-center">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-            RUEHL ADMIN
-          </h1>
-          <p className="text-sm text-gray-500 mt-3">Restricted access control panel</p>
+          <h1 className="text-4xl font-black tracking-tight text-[#a855f7]">RUEHL ADMIN</h1>
+          <p className="mt-3 text-sm text-zinc-400">Restricted access control panel</p>
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 space-y-4">
@@ -168,7 +166,7 @@ export default function AdminLoginPage() {
           <button
             onClick={handleAdminLogin}
             disabled={loading}
-            className="w-full rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 py-2.5 text-sm font-semibold disabled:opacity-60"
+            className="w-full rounded-xl bg-[#a855f7] py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-60"
           >
             {loading ? 'Please wait...' : 'Login as Admin'}
           </button>

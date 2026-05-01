@@ -309,10 +309,7 @@ export default function LoginPage() {
     <div className="flex justify-center min-h-screen bg-black">
       <div className="w-full max-w-[430px] flex flex-col justify-center px-6 py-10 text-white">
         <div className="mb-8 text-center">
-          <h1 className="text-5xl font-black tracking-tight bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-            RUEHL
-          </h1>
-          <p className="text-gray-500 mt-3 text-sm">Your elite training community</p>
+          <h1 className="text-5xl font-black tracking-tight text-[#a855f7]">RUEHL</h1>
         </div>
 
         <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4 backdrop-blur">
@@ -342,7 +339,7 @@ export default function LoginPage() {
                     resetFeedback();
                     router.push('/reset-password');
                   }}
-                  className="text-sm text-gray-400 hover:text-white"
+                  className="text-sm text-zinc-400 hover:text-white"
                 >
                   Forgot password?
                 </button>
@@ -361,7 +358,7 @@ export default function LoginPage() {
                 <button
                   onClick={handleVerifyTwoFactor}
                   disabled={loading}
-                  className="w-full rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 py-2.5 text-sm font-semibold disabled:opacity-50"
+                  className="w-full rounded-xl bg-[#a855f7] py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
                 >
                   {loading ? 'Please wait...' : 'Verify OTP'}
                 </button>
@@ -369,7 +366,7 @@ export default function LoginPage() {
                 <button
                   onClick={handleSignIn}
                   disabled={loading}
-                  className="w-full rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 py-2.5 text-sm font-semibold disabled:opacity-50"
+                  className="w-full rounded-xl bg-[#a855f7] py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
                 >
                   {loading ? 'Please wait...' : 'Sign In'}
                 </button>
@@ -381,7 +378,7 @@ export default function LoginPage() {
                     resetFeedback();
                     setMode('signup');
                   }}
-                  className="text-purple-400"
+                  className="text-[#a855f7] hover:underline"
                 >
                   Create account
                 </button>
@@ -439,7 +436,7 @@ export default function LoginPage() {
               <button
                 onClick={handleSignUp}
                 disabled={loading}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold"
+                className="w-full rounded-xl bg-[#a855f7] py-3 font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
               >
                 {loading ? 'Please wait...' : 'Create Account'}
               </button>
@@ -450,7 +447,7 @@ export default function LoginPage() {
                     resetFeedback();
                     setMode('signin');
                   }}
-                  className="text-purple-400"
+                  className="text-[#a855f7] hover:underline"
                 >
                   I already have an account
                 </button>

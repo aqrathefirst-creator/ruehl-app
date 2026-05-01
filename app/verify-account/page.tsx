@@ -223,10 +223,8 @@ function VerifyAccountPageContent() {
     <div className="flex justify-center min-h-screen bg-black">
       <div className="w-full max-w-[430px] flex flex-col justify-center px-6 py-10 text-white">
         <div className="mb-8 text-center">
-          <h1 className="text-5xl font-black tracking-tight bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-            RUEHL
-          </h1>
-          <p className="text-gray-500 mt-3 text-sm">Verify your account to enter the app</p>
+          <h1 className="text-5xl font-black tracking-tight text-[#a855f7]">RUEHL</h1>
+          <p className="mt-3 text-sm text-zinc-400">Verify your account to enter the app</p>
         </div>
 
         <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4 backdrop-blur">
@@ -249,7 +247,7 @@ function VerifyAccountPageContent() {
           <button
             onClick={handleVerify}
             disabled={loading}
-            className="w-full rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 py-2.5 text-sm font-semibold disabled:opacity-50"
+            className="w-full rounded-xl bg-[#a855f7] py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
           >
             {loading ? 'Please wait...' : 'Verify Account'}
           </button>
@@ -259,7 +257,7 @@ function VerifyAccountPageContent() {
               type="button"
               onClick={handleResend}
               disabled={cooldown > 0 || loading || !pending}
-              className="text-purple-400 disabled:text-gray-600"
+              className="text-[#a855f7] hover:underline disabled:text-gray-600 disabled:no-underline"
             >
               Resend code
             </button>
