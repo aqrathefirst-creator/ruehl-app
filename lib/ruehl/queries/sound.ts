@@ -89,28 +89,13 @@ async function resolveCoverUrl(
   if (ltId != null && String(ltId).trim()) {
     const { data, error } = await client
       .from('licensed_tracks')
-      .select('cover_url')
+      .select('artwork_url')
       .eq('id', String(ltId).trim())
       .limit(1);
     if (error) {
       if (!isMissingRelation(error)) throw error;
     } else {
-      const url = String((data?.[0] as { cover_url?: string } | undefined)?.cover_url || '').trim();
-      if (url) return url;
-    }
-  }
-
-  const usId = row.user_sound_id;
-  if (usId != null && String(usId).trim()) {
-    const { data, error } = await client
-      .from('user_sounds')
-      .select('cover_url')
-      .eq('id', String(usId).trim())
-      .limit(1);
-    if (error) {
-      if (!isMissingRelation(error)) throw error;
-    } else {
-      const url = String((data?.[0] as { cover_url?: string } | undefined)?.cover_url || '').trim();
+      const url = String((data?.[0] as { artwork_url?: string } | undefined)?.artwork_url || '').trim();
       if (url) return url;
     }
   }
