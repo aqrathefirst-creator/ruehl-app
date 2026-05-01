@@ -33,7 +33,7 @@ export default async function UsernameProfilePage({
     <div className="min-h-screen bg-black text-white">
       <div className="mx-auto max-w-2xl pb-16">
         <ProfileHeader profile={profile} currentSound={currentSound} />
-        <ProfileStats stats={stats} />
+        <ProfileStats stats={stats} username={profile.username} />
         <ProfileActions profile={profile} />
         <ProfileTabs profile={profile} canViewTabs={canViewTabs} />
       </div>

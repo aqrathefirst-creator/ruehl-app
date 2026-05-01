@@ -1,5 +1,29 @@
+import { NextRequest } from 'next/server';
 import { requireUser } from '@/lib/server/supabase';
 import { jsonError, jsonOk } from '@/lib/server/responses';
+import { createServerSupabase } from '@/lib/server/supabaseServer';
+import { getFollowersOf, getFollowingOf } from '@/lib/ruehl/queries/follows';
+
+export async function GET(req: NextRequest) {
+  const userId = req.nextUrl.searchParams.get('userId')?.trim();
+  const type = req.nextUrl.searchParams.get('type') ?? 'followers';
+  const offset = Math.max(0, Number.parseInt(req.nextUrl.searchParams.get('offset') ?? '0', 10) || 0);
+  const limit = Math.min(50, Math.max(1, Number.parseInt(req.nextUrl.searchParams.get('limit') ?? '20', 10) || 20));
+
+  if (!userId) {
+    return jsonError('userId is required', 400);
+  }
+
+  const supabase = await createServerSupabase();
+  const fn = type === 'following' ? getFollowingOf : getFollowersOf;
+  try {
+    const items = await fn(userId, offset, limit, supabase);
+    return jsonOk(items);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Could not load follow list';
+    return jsonError(msg, 400);
+  }
+}
 
 export async function POST(request: Request) {
   const auth = await requireUser(request.headers.get('authorization'));
