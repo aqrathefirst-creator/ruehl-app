@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Compass, Home, Settings, Shield } from 'lucide-react';
+import { Compass, Flame, Home, Settings, Shield } from 'lucide-react';
+import { isProfileStylePath } from '@/components/shell/NavRail';
 
 export type NavItemDef = {
   href: string;
@@ -13,6 +14,12 @@ export type NavItemDef = {
 
 export const TOP_BAR_NAV_ITEMS: NavItemDef[] = [
   { label: 'Home', href: '/', icon: Home, match: (pathname) => pathname === '/' },
+  {
+    label: 'Now',
+    href: '/now',
+    icon: Flame,
+    match: (pathname) => pathname === '/now' || pathname.startsWith('/now/'),
+  },
   {
     label: 'Explore',
     href: '/explore',
@@ -29,6 +36,7 @@ type Props = {
 export default function TopBar({ profileHref, showAdmin }: Props) {
   const pathname = usePathname() || '';
   const settingsActive = pathname.startsWith('/settings');
+  const youActive = pathname.startsWith('/profile') || isProfileStylePath(pathname);
 
   return (
     <header className="fixed left-0 right-0 top-0 z-40 hidden h-14 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-primary)] px-4 md:flex lg:hidden">
@@ -54,9 +62,7 @@ export default function TopBar({ profileHref, showAdmin }: Props) {
         <Link
           href={profileHref}
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold ${
-            pathname.startsWith('/profile') || pathname.match(/^\/[^/]+$/)
-              ? 'text-[var(--accent-violet-bright)]'
-              : 'text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
+            youActive ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
           }`}
           aria-label="You"
         >

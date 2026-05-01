@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Compass, Home, Settings, Shield, UserRound } from 'lucide-react';
+import { Compass, Flame, Home, Settings, Shield, UserRound } from 'lucide-react';
 
 export type RailNavItem = {
   key: string;
@@ -14,6 +14,13 @@ export type RailNavItem = {
 
 export const RAIL_ITEMS: RailNavItem[] = [
   { key: 'home', label: 'Home', href: '/', icon: Home, match: (p) => p === '/' },
+  {
+    key: 'now',
+    label: 'Now',
+    href: '/now',
+    icon: Flame,
+    match: (p) => p === '/now' || p.startsWith('/now/'),
+  },
   {
     key: 'explore',
     label: 'Explore',
@@ -53,7 +60,7 @@ const RESERVED_SEGMENTS = new Set([
   'now',
 ]);
 
-function isProfileStylePath(pathname: string): boolean {
+export function isProfileStylePath(pathname: string): boolean {
   const p = pathname.replace(/\/$/, '') || '/';
   if (p.startsWith('/profile/')) return true;
   const m = /^\/([^/]+)$/.exec(p);
