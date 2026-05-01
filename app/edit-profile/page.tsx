@@ -83,13 +83,11 @@ export default function EditProfile() {
             <img src={avatarUrl} alt="Profile avatar preview" className="h-full w-full object-cover" />
           </div>
         )}
-        <div>
-          <p className="text-lg font-bold text-gray-900">
-            @{displayHandle}
-            {fullName.trim() ? (
-              <span className="font-normal text-gray-600"> · {fullName.trim()}</span>
-            ) : null}
-          </p>
+        <div className="space-y-0.5">
+          <p className="text-lg font-bold text-gray-900">@{displayHandle}</p>
+          {fullName.trim() ? (
+            <p className="text-base font-normal text-gray-600">{fullName.trim()}</p>
+          ) : null}
           <p className="text-sm text-gray-500">{bio || 'No bio yet'}</p>
         </div>
       </div>
@@ -111,7 +109,7 @@ export default function EditProfile() {
             className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-white placeholder:text-zinc-600 focus:border-zinc-700 focus:outline-none"
           />
           <span className="mt-1 block text-xs text-zinc-500">
-            Display name shown next to your @username on your profile.
+            Display name shown below your @username on your profile.
           </span>
         </label>
 

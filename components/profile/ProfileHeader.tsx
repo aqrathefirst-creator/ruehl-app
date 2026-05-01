@@ -40,31 +40,44 @@ export default function ProfileHeader({ profile, isOwnProfile = false, showAdmin
           )}
         </div>
 
-        {/* TikTok-style: tight vertical stack (gap ~6px), min-w-0 for truncation in flex */}
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5 pt-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <h1 className="inline-flex min-w-0 max-w-full items-center gap-2 text-xl font-bold tracking-tight text-white md:text-2xl">
+        {/* Identity column — stacked rows */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1 pt-1">
+          {/* Row 1: bold @username + badge; View Identity here only when no full_name */}
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="inline-flex min-w-0 items-center gap-2 text-xl font-bold tracking-tight text-white md:text-2xl">
               <span className="truncate">@{handle}</span>
-              <span className="inline-flex shrink-0 items-center">
-                <VerificationBadge
-                  status={profile.badge_verification_status}
-                  legacyIsVerified={profile.is_verified}
-                  size="sm"
-                />
-              </span>
+              <VerificationBadge
+                status={profile.badge_verification_status}
+                legacyIsVerified={profile.is_verified}
+                size="sm"
+              />
             </h1>
-            {fullName ? (
-              <span className="min-w-0 truncate text-base font-normal text-zinc-400">· {fullName}</span>
+            {!fullName ? (
+              <Link
+                href={identityHref}
+                className="shrink-0 text-zinc-400 transition hover:text-white"
+                title="View Identity"
+                aria-label="View Identity"
+              >
+                <UserCircle className="h-[18px] w-[18px] md:h-5 md:w-5" strokeWidth={1.75} />
+              </Link>
             ) : null}
-            <Link
-              href={identityHref}
-              className="shrink-0 text-zinc-400 transition hover:text-white"
-              title="View Identity"
-              aria-label="View Identity"
-            >
-              <UserCircle className="h-[18px] w-[18px] md:h-5 md:w-5" strokeWidth={1.75} />
-            </Link>
           </div>
+
+          {/* Row 2: full_name + View Identity */}
+          {fullName ? (
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-base font-normal text-zinc-400">{fullName}</span>
+              <Link
+                href={identityHref}
+                className="shrink-0 text-zinc-400 transition hover:text-white"
+                title="View Identity"
+                aria-label="View Identity"
+              >
+                <UserCircle className="h-[18px] w-[18px] md:h-5 md:w-5" strokeWidth={1.75} />
+              </Link>
+            </div>
+          ) : null}
         </div>
 
         {isOwnProfile ? (
