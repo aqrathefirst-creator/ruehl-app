@@ -3,8 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Compass, Flame, Home, Plus } from 'lucide-react';
-import { showCreateInAppPrompt } from '@/components/shell/createInAppPrompt';
-import { isProfileStylePath } from '@/lib/shell/navProfile';
+import CreateModal from '@/components/shell/CreateModal';
 import { useEffect, useState } from 'react';
 import { clearCreateUploadState, subscribeToCreateUpload, type CreateUploadSnapshot } from '@/lib/createUploadQueue';
 import { prewarmCameraStream } from '@/lib/cameraSession';
@@ -18,6 +17,7 @@ export default function BottomNav() {
   const [userId, setUserId] = useState<string | null>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [uploadSnapshot, setUploadSnapshot] = useState<CreateUploadSnapshot>({
     active: false,
     progress: 0,
@@ -119,8 +119,12 @@ export default function BottomNav() {
   const isHomeActive = pathname === '/';
   const isNowActive = pathname === '/now' || (pathname || '').startsWith('/now/');
   const isExploreActive = pathname === '/explore' || (pathname || '').startsWith('/explore/');
+  const pathNorm = (pathname?.replace(/\/$/, '') || '/').toLowerCase();
+  const unameLower = username?.toLowerCase();
   const isProfileActive =
-    Boolean(pathname?.startsWith('/profile')) || Boolean(pathname && isProfileStylePath(pathname));
+    Boolean(userId) &&
+    (pathNorm === `/profile/${userId}`.toLowerCase() ||
+      Boolean(unameLower && pathNorm === `/${unameLower}`));
 
   if (isAdminRoute) {
     return null;
@@ -135,6 +139,7 @@ export default function BottomNav() {
 
   return (
     <>
+      <CreateModal open={showCreateModal} onClose={() => setShowCreateModal(false)} />
       {(uploadSnapshot.active || uploadSnapshot.error) && (
         <button
           type="button"
@@ -253,7 +258,7 @@ export default function BottomNav() {
 
           <button
             type="button"
-            onClick={() => showCreateInAppPrompt()}
+            onClick={() => setShowCreateModal(true)}
             className="absolute left-1/2 top-0 z-10 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#a855f7] shadow-xl transition hover:brightness-110 active:scale-95"
             aria-label="Create"
           >

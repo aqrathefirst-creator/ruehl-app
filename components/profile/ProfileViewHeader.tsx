@@ -61,6 +61,16 @@ export default function ProfileViewHeader({
 
   return (
     <div className="flex w-full flex-col items-center border-b border-[var(--border-subtle)] px-4 pb-6 pt-2 md:items-start">
+      {isOwnProfile && (
+        <div className="mb-2 flex w-full max-w-md justify-end md:max-w-none">
+          <Link
+            href="/settings"
+            className="text-sm text-[var(--text-muted)] transition hover:text-[var(--text-primary)]"
+          >
+            Settings
+          </Link>
+        </div>
+      )}
       <div
         className="mb-3 flex h-[90px] w-[90px] shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-avatar-outer)] bg-[var(--bg-tertiary)] p-0.5"
         style={{ boxShadow: 'inset 0 0 0 2px var(--avatar-ring)' }}

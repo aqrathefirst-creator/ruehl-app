@@ -7,7 +7,6 @@ import DeletedGate from '@/components/DeletedGate';
 import NavRail from '@/components/shell/NavRail';
 import { useProfileRailUserId } from '@/components/shell/ProfileRailUserIdProvider';
 import RightRail from '@/components/shell/RightRail';
-import TopBar from '@/components/shell/TopBar';
 import { deriveRightRailVariant } from '@/lib/shell/rightRailVariant';
 import { useUser } from '@/lib/useUser';
 
@@ -22,20 +21,22 @@ function AppShellInner({ children }: Props) {
 
   const rightRailVariant = deriveRightRailVariant(pathname);
 
-  const mainPadTop = 'md:pt-14 lg:pt-0';
-  const mainMarginLeft = 'lg:ml-[var(--shell-nav-collapsed)] min-[1440px]:ml-[var(--shell-nav-expanded)]';
   const mainMarginRight =
     rightRailVariant !== 'none' ? 'xl:mr-[var(--shell-right-rail)]' : '';
 
   const shellChrome = (
     <div className="min-h-screen overflow-x-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <NavRail />
-      <TopBar />
-      <RightRail variant={rightRailVariant} profileUserId={profileUserId} />
+      <div className="flex min-h-screen">
+        <aside className="sticky top-0 z-40 hidden h-screen w-[var(--shell-nav-expanded)] shrink-0 flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-primary)] md:flex">
+          <NavRail />
+        </aside>
 
-      <main className={`min-h-screen min-w-0 ${mainMarginLeft} ${mainMarginRight} ${mainPadTop}`}>
-        <div className="min-h-screen w-full min-w-0">{children}</div>
-      </main>
+        <main className={`min-h-screen min-w-0 flex-1 ${mainMarginRight}`}>
+          <div className="min-h-screen w-full min-w-0">{children}</div>
+        </main>
+      </div>
+
+      <RightRail variant={rightRailVariant} profileUserId={profileUserId} />
 
       <BottomNav />
     </div>
