@@ -11,16 +11,66 @@ function rowToRuehlPost(row: Record<string, unknown>): RuehlPost {
   return normalizePost(row) as RuehlPost;
 }
 
-export async function getPowrPostsByUser(userId: string, limit = 20): Promise<RuehlPost[]> {
-  const { data, error } = await supabase
-    .from('posts')
+function isMissingRelation(err: { message?: string; code?: string } | null): boolean {
+  const m = String(err?.message || '').toLowerCase();
+  return err?.code === '42P01' || (m.includes('relation') && m.includes('does not exist'));
+}
+
+/** Prefer `visible_posts`; fall back to `posts` when the view is absent (local / older DB). */
+async function fetchMediaPostsForUser(userId: string, limit: number): Promise<Record<string, unknown>[]> {
+  let res = await supabase
+    .from('visible_posts')
+    .select('*')
+    .eq('user_id', userId)
+    .not('media_url', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (res.error && isMissingRelation(res.error)) {
+    res = await supabase
+      .from('posts')
+      .select('*')
+      .eq('user_id', userId)
+      .not('media_url', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+  }
+  if (res.error) throw res.error;
+  return (res.data as Record<string, unknown>[]) ?? [];
+}
+
+/** Recent rows for POWR filtering — cap before client `isPowrPost` (carousel / text rules). */
+async function fetchRecentPostsForUser(userId: string, scanLimit: number): Promise<Record<string, unknown>[]> {
+  let res = await supabase
+    .from('visible_posts')
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(250);
-  if (error) throw error;
-  const powr = (data || []).filter((r) => isPowrPost(r as Record<string, unknown>));
-  return powr.slice(0, limit).map((r) => rowToRuehlPost(r as Record<string, unknown>));
+    .limit(scanLimit);
+  if (res.error && isMissingRelation(res.error)) {
+    res = await supabase
+      .from('posts')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(scanLimit);
+  }
+  if (res.error) throw res.error;
+  return (res.data as Record<string, unknown>[]) ?? [];
+}
+
+/** Posts with primary `media_url` — native Posts tab 3-column grid. */
+export async function getMediaPostsByUser(userId: string, limit = 30): Promise<RuehlPost[]> {
+  const rows = await fetchMediaPostsForUser(userId, limit);
+  return rows.map((r) => rowToRuehlPost(r));
+}
+
+const POWR_SCAN_LIMIT = 250;
+
+/** Text-only POWR posts — no primary media and no carousel URLs (`isPowrPost`). */
+export async function getPowrPostsByUser(userId: string, limit = 30): Promise<RuehlPost[]> {
+  const rows = await fetchRecentPostsForUser(userId, POWR_SCAN_LIMIT);
+  const powr = rows.filter((r) => isPowrPost(r));
+  return powr.slice(0, limit).map((r) => rowToRuehlPost(r));
 }
 
 export type ProfileDropRow = {
@@ -40,25 +90,6 @@ export async function getDropsByUser(userId: string, limit = 20): Promise<Profil
     .limit(limit);
   if (error) throw error;
   return (data || []) as ProfileDropRow[];
-}
-
-export type ProfileDropEchoRow = {
-  id: string;
-  drop_id: string;
-  user_id: string;
-  duration_seconds: number | null;
-  created_at: string | null;
-};
-
-export async function getEchoesByUser(userId: string, limit = 20): Promise<ProfileDropEchoRow[]> {
-  const { data, error } = await supabase
-    .from('drop_echoes')
-    .select('id, drop_id, user_id, duration_seconds, created_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return (data || []) as ProfileDropEchoRow[];
 }
 
 export type LiftedPostForProfile = RuehlPost & {

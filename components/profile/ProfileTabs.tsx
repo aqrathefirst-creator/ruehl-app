@@ -3,21 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RuehlProfilePage } from '@/lib/ruehl/queries/profileServer';
 import {
+  getMediaPostsByUser,
   getPowrPostsByUser,
   getDropsByUser,
-  getEchoesByUser,
   getLiftedPostsByUser,
   type LiftedPostForProfile,
   type ProfileDropRow,
-  type ProfileDropEchoRow,
 } from '@/lib/ruehl/queries/profileTabs';
+import MediaPostThumbnail from '@/components/profile/cards/MediaPostThumbnail';
 import PowrPostCard from '@/components/profile/cards/PowrPostCard';
 import DropCard from '@/components/profile/cards/DropCard';
-import EchoCard from '@/components/profile/cards/EchoCard';
 import LiftedItemCard from '@/components/profile/cards/LiftedItemCard';
 import type { RuehlPost } from '@/lib/ruehl/types';
 
-export type ProfileSurfaceTab = 'powr' | 'drops' | 'echoes' | 'lifts';
+export type ProfileSurfaceTab = 'posts' | 'powr' | 'drops' | 'lifts';
 
 type Props = {
   profile: RuehlProfilePage;
@@ -25,20 +24,20 @@ type Props = {
 };
 
 const TABS: { key: ProfileSurfaceTab; label: string }[] = [
+  { key: 'posts', label: 'Posts' },
   { key: 'powr', label: 'POWR' },
   { key: 'drops', label: 'DROPS' },
-  { key: 'echoes', label: 'Echoes' },
   { key: 'lifts', label: 'Lifts' },
 ];
 
 export default function ProfileTabs({ profile, canViewTabs }: Props) {
-  const [active, setActive] = useState<ProfileSurfaceTab>('powr');
+  const [active, setActive] = useState<ProfileSurfaceTab>('posts');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [readyTab, setReadyTab] = useState<ProfileSurfaceTab | null>(null);
+  const [mediaPosts, setMediaPosts] = useState<RuehlPost[] | null>(null);
   const [powr, setPowr] = useState<RuehlPost[] | null>(null);
   const [drops, setDrops] = useState<ProfileDropRow[] | null>(null);
-  const [echoes, setEchoes] = useState<ProfileDropEchoRow[] | null>(null);
   const [lifted, setLifted] = useState<LiftedPostForProfile[] | null>(null);
 
   const loadSeq = useRef(0);
@@ -50,7 +49,11 @@ export default function ProfileTabs({ profile, canViewTabs }: Props) {
       setLoading(true);
       setErr(null);
       try {
-        if (tab === 'powr') {
+        if (tab === 'posts') {
+          const rows = await getMediaPostsByUser(profile.id);
+          if (seq !== loadSeq.current) return;
+          setMediaPosts(rows);
+        } else if (tab === 'powr') {
           const rows = await getPowrPostsByUser(profile.id);
           if (seq !== loadSeq.current) return;
           setPowr(rows);
@@ -58,10 +61,6 @@ export default function ProfileTabs({ profile, canViewTabs }: Props) {
           const rows = await getDropsByUser(profile.id);
           if (seq !== loadSeq.current) return;
           setDrops(rows);
-        } else if (tab === 'echoes') {
-          const rows = await getEchoesByUser(profile.id);
-          if (seq !== loadSeq.current) return;
-          setEchoes(rows);
         } else {
           const rows = await getLiftedPostsByUser(profile.id);
           if (seq !== loadSeq.current) return;
@@ -138,6 +137,20 @@ export default function ProfileTabs({ profile, canViewTabs }: Props) {
         ) : null}
 
         {!loading &&
+          active === 'posts' &&
+          readyTab === 'posts' &&
+          (mediaPosts?.length ? (
+            <div className="grid grid-cols-3 gap-1 px-0">
+              {mediaPosts.map((p) => (
+                <MediaPostThumbnail key={p.id} post={p} />
+              ))}
+            </div>
+          ) : null)}
+        {!loading && active === 'posts' && readyTab === 'posts' && mediaPosts?.length === 0 ? (
+          <p className="px-2 text-center text-sm text-zinc-500">No posts yet.</p>
+        ) : null}
+
+        {!loading &&
           active === 'powr' &&
           readyTab === 'powr' &&
           (powr?.length
@@ -173,25 +186,6 @@ export default function ProfileTabs({ profile, canViewTabs }: Props) {
             : null)}
         {!loading && active === 'drops' && readyTab === 'drops' && drops?.length === 0 ? (
           <p className="px-2 text-center text-sm text-zinc-500">No drops yet.</p>
-        ) : null}
-
-        {!loading &&
-          active === 'echoes' &&
-          readyTab === 'echoes' &&
-          (echoes?.length
-            ? echoes.map((d) => (
-                <EchoCard
-                  key={d.id}
-                  echo={d}
-                  profileUsername={profile.username}
-                  profileAvatarUrl={profile.avatar_url}
-                  profileBadgeStatus={profile.badge_verification_status}
-                  profileIsVerified={profile.is_verified}
-                />
-              ))
-            : null)}
-        {!loading && active === 'echoes' && readyTab === 'echoes' && echoes?.length === 0 ? (
-          <p className="px-2 text-center text-sm text-zinc-500">No echoes yet.</p>
         ) : null}
 
         {!loading &&
