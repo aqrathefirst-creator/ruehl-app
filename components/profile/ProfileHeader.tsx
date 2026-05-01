@@ -2,7 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { MoreHorizontal, Settings, Shield, UserCircle } from 'lucide-react';
 import type { RuehlProfilePage } from '@/lib/ruehl/queries/profileServer';
-import VerifiedBadge from '@/components/profile/VerifiedBadge';
+import VerificationBadge from '@/components/profile/VerificationBadge';
 import { profileDisplayName, profileFullName } from '@/lib/ruehl/profileDisplay';
 
 type Props = {
@@ -15,54 +15,55 @@ type Props = {
 
 export default function ProfileHeader({ profile, isOwnProfile = false, showAdminIcon = false }: Props) {
   const handle = profileDisplayName(profile);
-  const displayNameLine = profileFullName(profile);
+  const fullName = profileFullName(profile);
   const un = String(profile.username || 'user').replace(/^@+/, '');
   const initial = (un[0] || 'U').toUpperCase();
   const identityHref = `/${encodeURIComponent(un)}/identity`;
 
   return (
     <header className="px-4 pb-2 pt-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-1 items-start gap-3 md:gap-4">
-          <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-zinc-700/80 bg-zinc-900 md:h-24 md:w-24">
-            {profile.avatar_url ? (
-              <Image
-                src={profile.avatar_url}
-                alt=""
-                width={96}
-                height={96}
-                className="h-full w-full object-cover"
-                unoptimized
-              />
-            ) : (
-              <span className="flex h-full w-full items-center justify-center text-2xl font-extrabold text-white md:text-3xl">
-                {initial}
-              </span>
-            )}
-          </div>
+      <div className="flex items-start gap-3 md:gap-4">
+        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-zinc-700/80 bg-zinc-900 md:h-24 md:w-24">
+          {profile.avatar_url ? (
+            <Image
+              src={profile.avatar_url}
+              alt=""
+              width={96}
+              height={96}
+              className="h-full w-full object-cover"
+              unoptimized
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-2xl font-extrabold text-white md:text-3xl">
+              {initial}
+            </span>
+          )}
+        </div>
 
-          <div className="min-w-0 flex-1 pt-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="inline-flex flex-wrap items-center gap-2 text-xl font-bold tracking-tight text-white md:text-2xl">
-                <span>@{handle}</span>
-                <VerifiedBadge
-                  badgeVerificationStatus={profile.badge_verification_status}
-                  isVerified={profile.is_verified}
-                  size={16}
+        {/* TikTok-style: tight vertical stack (gap ~6px), min-w-0 for truncation in flex */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5 pt-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <h1 className="inline-flex min-w-0 max-w-full items-center gap-2 text-xl font-bold tracking-tight text-white md:text-2xl">
+              <span className="truncate">@{handle}</span>
+              <span className="inline-flex shrink-0 items-center">
+                <VerificationBadge
+                  status={profile.badge_verification_status}
+                  legacyIsVerified={profile.is_verified}
+                  size="sm"
                 />
-              </h1>
-              <Link
-                href={identityHref}
-                className="text-zinc-400 transition hover:text-white"
-                title="View Identity"
-                aria-label="View Identity"
-              >
-                <UserCircle className="h-[18px] w-[18px] md:h-5 md:w-5" strokeWidth={1.75} />
-              </Link>
-            </div>
-            {displayNameLine ? (
-              <div className="mt-0.5 text-base font-normal text-zinc-300">{displayNameLine}</div>
+              </span>
+            </h1>
+            {fullName ? (
+              <span className="min-w-0 truncate text-base font-normal text-zinc-400">· {fullName}</span>
             ) : null}
+            <Link
+              href={identityHref}
+              className="shrink-0 text-zinc-400 transition hover:text-white"
+              title="View Identity"
+              aria-label="View Identity"
+            >
+              <UserCircle className="h-[18px] w-[18px] md:h-5 md:w-5" strokeWidth={1.75} />
+            </Link>
           </div>
         </div>
 

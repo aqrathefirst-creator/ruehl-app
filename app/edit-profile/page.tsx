@@ -77,15 +77,19 @@ export default function EditProfile() {
       </div>
 
       {/* PREVIEW */}
-      <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5 text-center shadow-sm">
+        <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5 text-center shadow-sm">
         {avatarUrl && (
           <div className="mx-auto h-20 w-20 overflow-hidden rounded-full bg-gray-200">
             <img src={avatarUrl} alt="Profile avatar preview" className="h-full w-full object-cover" />
           </div>
         )}
         <div>
-          <p className="text-lg font-bold text-gray-900">@{displayHandle}</p>
-          {fullName.trim() ? <p className="text-base font-normal text-gray-700">{fullName.trim()}</p> : null}
+          <p className="text-lg font-bold text-gray-900">
+            @{displayHandle}
+            {fullName.trim() ? (
+              <span className="font-normal text-gray-600"> · {fullName.trim()}</span>
+            ) : null}
+          </p>
           <p className="text-sm text-gray-500">{bio || 'No bio yet'}</p>
         </div>
       </div>
@@ -97,16 +101,18 @@ export default function EditProfile() {
         ) : null}
 
         <label className="block">
-          <span className="mb-1 block text-sm font-semibold text-gray-900">Name</span>
+          <span className="mb-1 block text-sm text-zinc-400">Name</span>
           <input
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            placeholder="Your name"
+            placeholder="Your name (e.g., Aqra)"
             maxLength={64}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-white placeholder:text-zinc-600 focus:border-zinc-700 focus:outline-none"
           />
-          <span className="mt-1 block text-xs text-gray-500">Display name shown below your username.</span>
+          <span className="mt-1 block text-xs text-zinc-500">
+            Display name shown next to your @username on your profile.
+          </span>
         </label>
 
         <div>

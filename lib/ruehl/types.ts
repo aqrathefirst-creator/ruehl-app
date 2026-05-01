@@ -16,7 +16,7 @@ export type RuehlProfile = {
   id: string;
   username: string | null;
   /** Canonical display name — `public.profiles.full_name` (native-style “Name” field). */
-  full_name: string | null;
+  full_name?: string | null;
   avatar_url: string | null;
   bio: string | null;
   identity_text: string | null;
