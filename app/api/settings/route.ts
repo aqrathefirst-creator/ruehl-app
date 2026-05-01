@@ -1,19 +1,28 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireUser } from '@/lib/server/supabase';
 import { jsonError, jsonOk } from '@/lib/server/responses';
 
+const PROFILE_SELECT =
+  'id, username, bio, avatar_url, allow_messages_from, show_activity_status, allow_tagging, two_factor_enabled, is_verified';
+
 type SettingsPayload = {
-  is_private_account?: boolean;
+  /** Privacy flag — stored on `public.users.is_private`, not profiles */
+  is_private?: boolean;
   allow_messages_from?: 'everyone' | 'followers' | 'none';
   show_activity_status?: boolean;
   allow_tagging?: boolean;
   two_factor_enabled?: boolean;
 };
 
-function sanitize(payload: SettingsPayload) {
-  const next: Record<string, boolean | string> = {};
+function splitPayload(payload: SettingsPayload): {
+  profile: Record<string, boolean | string>;
+  user: Record<string, boolean>;
+} {
+  const profile: Record<string, boolean | string> = {};
+  const user: Record<string, boolean> = {};
 
-  if (typeof payload.is_private_account === 'boolean') {
-    next.is_private_account = payload.is_private_account;
+  if (typeof payload.is_private === 'boolean') {
+    user.is_private = payload.is_private;
   }
 
   if (
@@ -21,37 +30,48 @@ function sanitize(payload: SettingsPayload) {
     payload.allow_messages_from === 'followers' ||
     payload.allow_messages_from === 'none'
   ) {
-    next.allow_messages_from = payload.allow_messages_from;
+    profile.allow_messages_from = payload.allow_messages_from;
   }
 
   if (typeof payload.show_activity_status === 'boolean') {
-    next.show_activity_status = payload.show_activity_status;
+    profile.show_activity_status = payload.show_activity_status;
   }
 
   if (typeof payload.allow_tagging === 'boolean') {
-    next.allow_tagging = payload.allow_tagging;
+    profile.allow_tagging = payload.allow_tagging;
   }
 
   if (typeof payload.two_factor_enabled === 'boolean') {
-    next.two_factor_enabled = payload.two_factor_enabled;
+    profile.two_factor_enabled = payload.two_factor_enabled;
   }
 
-  return next;
+  return { profile, user };
+}
+
+async function getSettingsResponse(supabase: SupabaseClient, userId: string) {
+  const [{ data: profile, error: pErr }, { data: userRow }] = await Promise.all([
+    supabase.from('profiles').select(PROFILE_SELECT).eq('id', userId).single(),
+    supabase.from('users').select('is_private').eq('id', userId).maybeSingle(),
+  ]);
+
+  if (pErr) throw new Error(pErr.message);
+
+  const isPrivate = Boolean((userRow as { is_private?: boolean } | null)?.is_private);
+
+  return { settings: { ...(profile as Record<string, unknown>), is_private: isPrivate } };
 }
 
 export async function GET(request: Request) {
   const auth = await requireUser(request.headers.get('authorization'));
   if (!auth.ok) return jsonError(auth.error, auth.status);
 
-  const { data, error } = await auth.supabase
-    .from('profiles')
-    .select('id, username, bio, avatar_url, is_private_account, allow_messages_from, show_activity_status, allow_tagging, two_factor_enabled, is_verified')
-    .eq('id', auth.user.id)
-    .single();
-
-  if (error) return jsonError(error.message, 400);
-
-  return jsonOk({ settings: data });
+  try {
+    const out = await getSettingsResponse(auth.supabase, auth.user.id);
+    return jsonOk(out);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Failed to load settings';
+    return jsonError(msg, 400);
+  }
 }
 
 export async function PATCH(request: Request) {
@@ -61,19 +81,26 @@ export async function PATCH(request: Request) {
   const body = (await request.json().catch(() => null)) as SettingsPayload | null;
   if (!body) return jsonError('Invalid body', 400);
 
-  const updates = sanitize(body);
-  if (Object.keys(updates).length === 0) {
+  const { profile, user } = splitPayload(body);
+  if (Object.keys(profile).length === 0 && Object.keys(user).length === 0) {
     return jsonError('No valid settings fields provided', 400);
   }
 
-  const { data, error } = await auth.supabase
-    .from('profiles')
-    .update(updates)
-    .eq('id', auth.user.id)
-    .select('id, username, bio, avatar_url, is_private_account, allow_messages_from, show_activity_status, allow_tagging, two_factor_enabled, is_verified')
-    .single();
+  if (Object.keys(user).length > 0) {
+    const { error: uErr } = await auth.supabase.from('users').update(user).eq('id', auth.user.id);
+    if (uErr) return jsonError(uErr.message, 400);
+  }
 
-  if (error) return jsonError(error.message, 400);
+  if (Object.keys(profile).length > 0) {
+    const { error: pErr } = await auth.supabase.from('profiles').update(profile).eq('id', auth.user.id);
+    if (pErr) return jsonError(pErr.message, 400);
+  }
 
-  return jsonOk({ settings: data });
+  try {
+    const out = await getSettingsResponse(auth.supabase, auth.user.id);
+    return jsonOk(out);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Failed to load settings';
+    return jsonError(msg, 400);
+  }
 }

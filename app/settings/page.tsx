@@ -12,7 +12,8 @@ type Settings = {
   username: string;
   bio: string | null;
   avatar_url: string | null;
-  is_private_account: boolean;
+  /** From `public.users.is_private` (merged into settings API response) */
+  is_private: boolean;
   allow_messages_from: 'everyone' | 'followers' | 'none';
   show_activity_status: boolean;
   allow_tagging: boolean;
@@ -155,7 +156,7 @@ export default function SettingsPage() {
 
     try {
       const next = {
-        is_private_account: settings.is_private_account,
+        is_private: settings.is_private,
         allow_messages_from: settings.allow_messages_from,
         show_activity_status: settings.show_activity_status,
         allow_tagging: settings.allow_tagging,
@@ -275,8 +276,8 @@ export default function SettingsPage() {
 
         <section className="rounded-2xl border border-white/10 bg-[#0E0E0E] p-4 space-y-3">
           <h2 className="text-lg font-bold">Privacy</h2>
-          <button onClick={() => updatePrivacy({ is_private_account: !settings?.is_private_account })} className="w-full rounded-lg bg-black/60 border border-white/10 px-3 py-2 text-left text-sm">
-            Private account: <span className="text-green-400">{settings?.is_private_account ? 'On' : 'Off'}</span>
+          <button onClick={() => updatePrivacy({ is_private: !settings?.is_private })} className="w-full rounded-lg bg-black/60 border border-white/10 px-3 py-2 text-left text-sm">
+            Private account: <span className="text-green-400">{settings?.is_private ? 'On' : 'Off'}</span>
           </button>
           <button onClick={() => updatePrivacy({ show_activity_status: !settings?.show_activity_status })} className="w-full rounded-lg bg-black/60 border border-white/10 px-3 py-2 text-left text-sm">
             Show activity status: <span className="text-green-400">{settings?.show_activity_status ? 'On' : 'Off'}</span>
