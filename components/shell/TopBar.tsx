@@ -2,99 +2,102 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, Compass, Flame, Home, Settings, Shield } from 'lucide-react';
-import { isProfileStylePath } from '@/components/shell/NavRail';
+import { Bell, Compass, Flame, Home, Plus, User } from 'lucide-react';
+import { showCreateInAppPrompt } from '@/components/shell/createInAppPrompt';
+import { isProfileStylePath } from '@/lib/shell/navProfile';
+import { useUser } from '@/lib/useUser';
 
-export type NavItemDef = {
-  href: string;
-  label: string;
-  icon: typeof Home;
-  match: (pathname: string) => boolean;
-};
-
-export const TOP_BAR_NAV_ITEMS: NavItemDef[] = [
-  { label: 'Home', href: '/', icon: Home, match: (pathname) => pathname === '/' },
-  {
-    label: 'Now',
-    href: '/now',
-    icon: Flame,
-    match: (pathname) => pathname === '/now' || pathname.startsWith('/now/'),
-  },
-  {
-    label: 'Explore',
-    href: '/explore',
-    icon: Compass,
-    match: (pathname) => pathname === '/explore' || pathname.startsWith('/explore/'),
-  },
-  {
-    label: 'Notifications',
-    href: '/notifications',
-    icon: Bell,
-    match: (pathname) => pathname === '/notifications' || pathname.startsWith('/notifications/'),
-  },
-];
-
-type Props = {
-  profileHref: string;
-  showAdmin: boolean;
-};
-
-export default function TopBar({ profileHref, showAdmin }: Props) {
+export default function TopBar() {
   const pathname = usePathname() || '';
-  const settingsActive = pathname.startsWith('/settings');
-  const youActive = pathname.startsWith('/profile') || isProfileStylePath(pathname);
+  const { user, profile } = useUser();
+
+  const profileHref = user?.id ? `/profile/${user.id}` : '/profile';
+  const avatarUrl = profile?.avatar_url ?? null;
+  const initial = profile?.username?.[0]?.toUpperCase() ?? 'U';
+
+  const youActive =
+    pathname.replace(/\/$/, '') === profileHref.replace(/\/$/, '') ||
+    pathname.startsWith('/profile') ||
+    isProfileStylePath(pathname);
+
+  const notificationsActive =
+    pathname === '/notifications' || pathname.startsWith('/notifications/');
+
+  const matchHome = pathname === '/';
+  const matchNow = pathname === '/now' || pathname.startsWith('/now/');
+  const matchExplore = pathname === '/explore' || pathname.startsWith('/explore/');
+
+  const iconBtn = (active: boolean) =>
+    `flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
+      active ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
+    }`;
 
   return (
     <header className="fixed left-0 right-0 top-0 z-40 hidden h-14 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-primary)] px-4 md:flex lg:hidden">
       <span className="text-sm font-black tracking-tight text-[var(--text-primary)]">Ruehl</span>
-      <nav className="flex flex-1 items-center justify-end gap-1 overflow-x-auto" aria-label="Primary">
-        {TOP_BAR_NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
-          const active = item.match(pathname);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
-                active ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-              aria-current={active ? 'page' : undefined}
-              aria-label={item.label}
-            >
-              <Icon size={20} strokeWidth={active ? 2.4 : 2} />
-            </Link>
-          );
-        })}
+      <nav className="flex flex-1 items-center justify-end gap-0.5 overflow-x-auto pr-1" aria-label="Primary">
+        <Link
+          href="/"
+          className={iconBtn(matchHome)}
+          aria-current={matchHome ? 'page' : undefined}
+          aria-label="Home"
+        >
+          <Home size={20} strokeWidth={matchHome ? 2.4 : 2} />
+        </Link>
+        <Link
+          href="/now"
+          className={iconBtn(matchNow)}
+          aria-current={matchNow ? 'page' : undefined}
+          aria-label="Now"
+        >
+          <Flame size={20} strokeWidth={matchNow ? 2.4 : 2} />
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => showCreateInAppPrompt()}
+          className="mx-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#a855f7] shadow-md transition hover:brightness-110 active:scale-[0.98]"
+          aria-label="Create"
+        >
+          <Plus size={22} className="text-white" strokeWidth={2.25} />
+        </button>
+
+        <Link
+          href="/explore"
+          className={iconBtn(matchExplore)}
+          aria-current={matchExplore ? 'page' : undefined}
+          aria-label="Explore"
+        >
+          <Compass size={20} strokeWidth={matchExplore ? 2.4 : 2} />
+        </Link>
+
         <Link
           href={profileHref}
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold ${
-            youActive ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
+          className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl transition-colors ${
+            youActive ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-secondary)]'
           }`}
+          aria-current={youActive ? 'page' : undefined}
           aria-label="You"
         >
-          You
+          {avatarUrl ? (
+            <span className="h-7 w-7 overflow-hidden rounded-full ring-1 ring-[var(--border-subtle)]">
+              <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            </span>
+          ) : (
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-secondary)] text-xs font-bold">
+              {initial}
+            </span>
+          )}
         </Link>
+
         <Link
-          href="/settings"
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-            settingsActive ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
-          }`}
-          aria-label="Settings"
-          aria-current={settingsActive ? 'page' : undefined}
+          href="/notifications"
+          className={iconBtn(notificationsActive)}
+          aria-current={notificationsActive ? 'page' : undefined}
+          aria-label="Notifications"
         >
-          <Settings size={20} strokeWidth={settingsActive ? 2.4 : 2} />
+          <Bell size={20} strokeWidth={notificationsActive ? 2.4 : 2} />
         </Link>
-        {showAdmin && (
-          <Link
-            href="/admin"
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              pathname.startsWith('/admin') ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-secondary)]'
-            }`}
-            aria-label="Admin"
-          >
-            <Shield size={20} strokeWidth={pathname.startsWith('/admin') ? 2.4 : 2} />
-          </Link>
-        )}
       </nav>
     </header>
   );

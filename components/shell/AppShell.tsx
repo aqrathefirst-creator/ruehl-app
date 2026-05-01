@@ -18,11 +18,9 @@ type Props = {
 function AppShellInner({ children }: Props) {
   const pathname = usePathname() || '';
   const { profileUserId } = useProfileRailUserId();
-  const { user, loading: userLoading, banned, deleted, platformAdmin: showAdmin } = useUser();
+  const { user, loading: userLoading, banned, deleted } = useUser();
 
   const rightRailVariant = deriveRightRailVariant(pathname);
-
-  const profileHref = user?.id ? `/profile/${user.id}` : '/profile';
 
   const mainPadTop = 'md:pt-14 lg:pt-0';
   const mainMarginLeft = 'lg:ml-[var(--shell-nav-collapsed)] min-[1440px]:ml-[var(--shell-nav-expanded)]';
@@ -31,8 +29,8 @@ function AppShellInner({ children }: Props) {
 
   const shellChrome = (
     <div className="min-h-screen overflow-x-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <NavRail profileHref={profileHref} showAdmin={showAdmin} />
-      <TopBar profileHref={profileHref} showAdmin={showAdmin} />
+      <NavRail />
+      <TopBar />
       <RightRail variant={rightRailVariant} profileUserId={profileUserId} />
 
       <main className={`min-h-screen min-w-0 ${mainMarginLeft} ${mainMarginRight} ${mainPadTop}`}>

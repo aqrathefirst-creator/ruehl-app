@@ -22,6 +22,7 @@ const RESERVED_USERNAME_SEGMENTS = new Set([
   'edit-profile',
   'profile',
   'now',
+  'saved',
 ]);
 
 /**

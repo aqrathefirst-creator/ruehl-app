@@ -2,9 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, Compass, Flame, Home, Settings, Shield, UserRound } from 'lucide-react';
+import { Compass, Flame, Home, Plus } from 'lucide-react';
+import { showCreateInAppPrompt } from '@/components/shell/createInAppPrompt';
+import { isProfileStylePath } from '@/lib/shell/navProfile';
+import { useUser } from '@/lib/useUser';
 
-export type RailNavItem = {
+type PrimaryLink = {
   key: string;
   href: string;
   label: string;
@@ -12,7 +15,7 @@ export type RailNavItem = {
   match: (pathname: string) => boolean;
 };
 
-export const RAIL_ITEMS: RailNavItem[] = [
+const PRIMARY_LINKS: PrimaryLink[] = [
   { key: 'home', label: 'Home', href: '/', icon: Home, match: (p) => p === '/' },
   {
     key: 'now',
@@ -28,61 +31,18 @@ export const RAIL_ITEMS: RailNavItem[] = [
     icon: Compass,
     match: (p) => p === '/explore' || p.startsWith('/explore/'),
   },
-  {
-    key: 'notifications',
-    label: 'Notifications',
-    href: '/notifications',
-    icon: Bell,
-    match: (p) => p === '/notifications' || p.startsWith('/notifications/'),
-  },
 ];
 
-type Props = {
-  profileHref: string;
-  showAdmin: boolean;
-};
-
-/** Single-segment paths that are not /@username profiles */
-const RESERVED_SEGMENTS = new Set([
-  'login',
-  'explore',
-  'charts',
-  'sessions',
-  'settings',
-  'notifications',
-  'create',
-  'admin',
-  'onboarding',
-  'verify-account',
-  'reset-password',
-  'messages',
-  'saved-sounds',
-  'sound',
-  'followers',
-  'following',
-  'powr',
-  'room',
-  'edit-profile',
-  'profile',
-  'now',
-]);
-
-export function isProfileStylePath(pathname: string): boolean {
-  const p = pathname.replace(/\/$/, '') || '/';
-  if (p.startsWith('/profile/')) return true;
-  const m = /^\/([^/]+)$/.exec(p);
-  if (!m) return false;
-  const seg = m[1].toLowerCase();
-  return !RESERVED_SEGMENTS.has(seg) && seg.length > 0;
-}
-
-export default function NavRail({ profileHref, showAdmin }: Props) {
+export default function NavRail() {
   const pathname = usePathname() || '';
+  const { user, profile } = useUser();
+
+  const profileHref = user?.id ? `/profile/${user.id}` : '/profile';
+  const avatarUrl = profile?.avatar_url ?? null;
+  const initial = profile?.username?.[0]?.toUpperCase() ?? 'U';
 
   const youActive =
     pathname.replace(/\/$/, '') === profileHref.replace(/\/$/, '') || isProfileStylePath(pathname);
-
-  const settingsActive = pathname.startsWith('/settings');
 
   const railClass =
     'fixed left-0 top-0 z-40 hidden h-screen shrink-0 flex-col justify-between border-r border-[var(--border-subtle)] bg-[var(--bg-primary)] py-6 lg:flex w-[var(--shell-nav-collapsed)] min-[1440px]:w-[var(--shell-nav-expanded)] overflow-x-hidden';
@@ -90,7 +50,38 @@ export default function NavRail({ profileHref, showAdmin }: Props) {
   return (
     <nav className={railClass} aria-label="Primary">
       <div className="flex min-h-0 flex-1 flex-col gap-1 px-2 min-[1440px]:px-3">
-        {RAIL_ITEMS.map((item) => {
+        {PRIMARY_LINKS.slice(0, 2).map((item) => {
+          const Icon = item.icon;
+          const active = item.match(pathname);
+          return (
+            <Link
+              key={item.key}
+              href={item.href}
+              className={`flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors min-[1440px]:px-3 ${
+                active
+                  ? 'text-[var(--accent-violet-bright)]'
+                  : 'text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+              aria-current={active ? 'page' : undefined}
+            >
+              <Icon size={22} strokeWidth={active ? 2.4 : 2} className="shrink-0" />
+              <span className={`hidden min-[1440px]:inline text-sm ${active ? 'font-semibold' : ''}`}>{item.label}</span>
+            </Link>
+          );
+        })}
+
+        <button
+          type="button"
+          onClick={() => showCreateInAppPrompt()}
+          className="flex items-center justify-center rounded-xl px-2 py-2 min-[1440px]:px-3"
+          aria-label="Create"
+        >
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#a855f7] shadow-md transition hover:brightness-110 active:scale-[0.98]">
+            <Plus size={26} className="text-white" strokeWidth={2.25} />
+          </span>
+        </button>
+
+        {PRIMARY_LINKS.slice(2).map((item) => {
           const Icon = item.icon;
           const active = item.match(pathname);
           return (
@@ -115,41 +106,19 @@ export default function NavRail({ profileHref, showAdmin }: Props) {
           className={`flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors min-[1440px]:px-3 ${
             youActive ? 'text-[var(--accent-violet-bright)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
           }`}
+          aria-current={youActive ? 'page' : undefined}
         >
-          <UserRound size={22} strokeWidth={youActive ? 2.4 : 2} className="shrink-0" />
+          {avatarUrl ? (
+            <span className="relative h-[22px] w-[22px] shrink-0 overflow-hidden rounded-full ring-1 ring-[var(--border-subtle)]">
+              <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            </span>
+          ) : (
+            <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-[var(--bg-secondary)] text-[11px] font-bold leading-none">
+              {initial}
+            </span>
+          )}
           <span className={`hidden min-[1440px]:inline text-sm ${youActive ? 'font-semibold' : ''}`}>You</span>
         </Link>
-
-        <Link
-          href="/settings"
-          className={`flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors min-[1440px]:px-3 ${
-            settingsActive
-              ? 'text-[var(--accent-violet-bright)]'
-              : 'text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
-          }`}
-          aria-current={settingsActive ? 'page' : undefined}
-        >
-          <Settings size={22} strokeWidth={settingsActive ? 2.4 : 2} className="shrink-0" />
-          <span className={`hidden min-[1440px]:inline text-sm ${settingsActive ? 'font-semibold' : ''}`}>Settings</span>
-        </Link>
-
-        {showAdmin && (
-          <Link
-            href="/admin"
-            className={`flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors min-[1440px]:px-3 ${
-              pathname.startsWith('/admin')
-                ? 'text-[var(--accent-violet-bright)]'
-                : 'text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            <Shield size={22} strokeWidth={pathname.startsWith('/admin') ? 2.4 : 2} className="shrink-0" />
-            <span
-              className={`hidden min-[1440px]:inline text-sm ${pathname.startsWith('/admin') ? 'font-semibold' : ''}`}
-            >
-              Admin
-            </span>
-          </Link>
-        )}
       </div>
 
       <div className="px-2 pt-4 min-[1440px]:px-3">

@@ -20,7 +20,7 @@ type Props = {
 };
 
 export default function ProfileActions({ profile }: Props) {
-  const { user } = useUser();
+  const { user, platformAdmin } = useUser();
   const viewerId = user?.id ?? null;
   const isOwn = Boolean(viewerId && viewerId === profile.id);
 
@@ -124,6 +124,20 @@ export default function ProfileActions({ profile }: Props) {
         >
           Settings
         </Link>
+        <Link
+          href="/notifications"
+          className={`${btnBase} border border-zinc-700 bg-transparent text-zinc-200 hover:border-violet-500/40 hover:bg-white/5`}
+        >
+          Notifications
+        </Link>
+        {platformAdmin && (
+          <Link
+            href="/admin"
+            className={`${btnBase} border border-zinc-700 bg-transparent text-zinc-200 hover:border-violet-500/40 hover:bg-white/5`}
+          >
+            Admin
+          </Link>
+        )}
       </div>
     );
   }
