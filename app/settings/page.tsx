@@ -64,6 +64,11 @@ export default async function SettingsHubPage() {
       subtitle: 'Your activity and history',
     },
     {
+      href: '/saved',
+      label: 'Saved',
+      subtitle: 'Posts you saved',
+    },
+    {
       href: '/settings/verification',
       label: 'Verification',
       subtitle: verificationLabel,

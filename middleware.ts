@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 const LEGACY_REDIRECTS = ['/sessions', '/room', '/powr', '/charts', '/onboarding'];
 
 /** Consumer routes not ready for web launch → home. */
-const COMING_SOON_REDIRECTS = ['/saved', '/saved-sounds', '/messages'];
+const COMING_SOON_REDIRECTS = ['/saved-sounds', '/messages'];
 
 function shouldRedirectToHome(pathname: string, prefixes: string[]): boolean {
   for (const route of prefixes) {
@@ -39,7 +39,6 @@ export const config = {
     '/powr/:path*',
     '/charts/:path*',
     '/onboarding/:path*',
-    '/saved/:path*',
     '/saved-sounds/:path*',
     '/messages/:path*',
     '/admin',
