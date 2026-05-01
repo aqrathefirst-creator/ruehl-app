@@ -20,7 +20,7 @@ type Props = {
 };
 
 export default function ProfileActions({ profile }: Props) {
-  const { user, platformAdmin } = useUser();
+  const { user } = useUser();
   const viewerId = user?.id ?? null;
   const isOwn = Boolean(viewerId && viewerId === profile.id);
 
@@ -106,41 +106,45 @@ export default function ProfileActions({ profile }: Props) {
     }
   }, [viewerId, isOwn, tuneBusy, blocked, tunedIn, profile.id]);
 
-  const btnBase =
-    'inline-flex min-h-[40px] min-w-[100px] cursor-pointer items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-50';
+  const handleShareProfile = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const url = window.location.href;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      void navigator.share({ url, title: document.title }).catch(() => {
+        void navigator.clipboard.writeText(url).catch(() => undefined);
+      });
+    } else {
+      void navigator.clipboard.writeText(url).catch(() => undefined);
+    }
+  }, []);
+
+  const rowBtn =
+    'inline-flex min-h-[40px] flex-1 cursor-pointer items-center justify-center rounded-full border border-zinc-700 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-60';
 
   if (isOwn) {
     return (
-      <div className="mx-auto flex max-w-2xl flex-wrap gap-2 px-4 py-4">
-        <Link
-          href="/edit-profile"
-          className={`${btnBase} border border-zinc-600 bg-zinc-900 text-white hover:border-violet-500/50 hover:bg-zinc-800`}
-        >
+      <div className="mx-auto flex max-w-2xl gap-2 px-4 py-3">
+        <Link href="/edit-profile" className={rowBtn}>
           Edit profile
         </Link>
-        <Link
-          href="/settings"
-          className={`${btnBase} border border-zinc-700 bg-transparent text-zinc-200 hover:border-violet-500/40 hover:bg-white/5`}
+        <button type="button" onClick={handleShareProfile} className={rowBtn}>
+          Share profile
+        </button>
+        <button
+          type="button"
+          disabled
+          title="Analytics coming soon"
+          className={rowBtn}
+          aria-disabled="true"
         >
-          Settings
-        </Link>
-        <Link
-          href="/notifications"
-          className={`${btnBase} border border-zinc-700 bg-transparent text-zinc-200 hover:border-violet-500/40 hover:bg-white/5`}
-        >
-          Notifications
-        </Link>
-        {platformAdmin && (
-          <Link
-            href="/admin"
-            className={`${btnBase} border border-zinc-700 bg-transparent text-zinc-200 hover:border-violet-500/40 hover:bg-white/5`}
-          >
-            Admin
-          </Link>
-        )}
+          Analytics
+        </button>
       </div>
     );
   }
+
+  const btnBase =
+    'inline-flex min-h-[40px] min-w-[100px] cursor-pointer items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-50';
 
   if (blocked === 'they_blocked' || blocked === 'i_blocked') {
     return (
@@ -169,7 +173,7 @@ export default function ProfileActions({ profile }: Props) {
     followState === 'following' ? 'Following' : followState === 'requested' ? 'Requested' : 'Follow';
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-wrap gap-2 px-4 py-4">
+    <div className="mx-auto flex max-w-2xl flex-wrap gap-2 px-4 py-3">
       <button
         type="button"
         onClick={() => void onFollow()}

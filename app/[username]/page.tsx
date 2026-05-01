@@ -10,6 +10,7 @@ import {
   getViewerUserId,
 } from '@/lib/ruehl/queries/profileServer';
 import { getCurrentSound } from '@/lib/ruehl/queries/profile';
+import { isUserPlatformAdmin } from '@/lib/api/userAdmin';
 import { createServerSupabase } from '@/lib/server/supabaseServer';
 
 export default async function UsernameProfilePage({
@@ -29,10 +30,18 @@ export default async function UsernameProfilePage({
     getCanViewPrivateTabs(profile.id, viewerId),
   ]);
 
+  const isOwnProfile = Boolean(viewerId && viewerId === profile.id);
+  const showAdminIcon = Boolean(viewerId && isOwnProfile && (await isUserPlatformAdmin(supabase, viewerId)));
+
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="mx-auto max-w-2xl pb-16">
-        <ProfileHeader profile={profile} currentSound={currentSound} />
+        <ProfileHeader
+          profile={profile}
+          currentSound={currentSound}
+          isOwnProfile={isOwnProfile}
+          showAdminIcon={showAdminIcon}
+        />
         <ProfileStats stats={stats} username={profile.username} />
         <ProfileActions profile={profile} />
         <ProfileTabs profile={profile} canViewTabs={canViewTabs} />

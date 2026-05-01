@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { UserCircle } from 'lucide-react';
+import { MoreHorizontal, Settings, Shield, UserCircle } from 'lucide-react';
 import type { RuehlProfile } from '@/lib/ruehl/types';
 import type { RuehlProfilePage } from '@/lib/ruehl/queries/profileServer';
 import type { CurrentSoundDisplay } from '@/lib/ruehl/queries/profile';
@@ -12,6 +12,10 @@ import CurrentSoundCard from '@/components/profile/CurrentSoundCard';
 type Props = {
   profile: RuehlProfilePage;
   currentSound: CurrentSoundDisplay | null;
+  /** Viewer is the profile owner — enables header corner controls. */
+  isOwnProfile?: boolean;
+  /** Platform admin — show shield link next to Settings (own profile only). */
+  showAdminIcon?: boolean;
 };
 
 function displayName(p: RuehlProfile): string {
@@ -38,7 +42,12 @@ function accountTypeLabel(p: RuehlProfile): string | null {
   return t === 'personal' ? 'Personal' : t === 'business' ? 'Business' : t === 'media' ? 'Media' : null;
 }
 
-export default function ProfileHeader({ profile, currentSound }: Props) {
+export default function ProfileHeader({
+  profile,
+  currentSound,
+  isOwnProfile = false,
+  showAdminIcon = false,
+}: Props) {
   const name = displayName(profile);
   const bio = bioBody(profile);
   const typeLabel = accountTypeLabel(profile);
@@ -47,7 +56,35 @@ export default function ProfileHeader({ profile, currentSound }: Props) {
   const identityHref = `/${encodeURIComponent(un)}/identity`;
 
   return (
-    <header className="border-b border-zinc-800/60 px-4 pb-4 pt-6">
+    <header className="relative border-b border-zinc-800/60 px-4 pb-4 pt-6">
+      {isOwnProfile ? (
+        <div className="absolute right-4 top-4 z-10 flex items-center gap-0.5">
+          <Link
+            href="/settings"
+            aria-label="Settings"
+            className="rounded-full p-2 text-zinc-400 transition hover:bg-zinc-900 hover:text-white"
+          >
+            <Settings size={20} strokeWidth={2} />
+          </Link>
+          {showAdminIcon ? (
+            <Link
+              href="/admin"
+              aria-label="Admin"
+              className="rounded-full p-2 text-zinc-400 transition hover:bg-zinc-900 hover:text-white"
+            >
+              <Shield size={20} strokeWidth={2} />
+            </Link>
+          ) : null}
+          <button
+            type="button"
+            aria-label="More options"
+            className="rounded-full p-2 text-zinc-400 transition hover:bg-zinc-900 hover:text-white"
+          >
+            <MoreHorizontal size={20} strokeWidth={2} />
+          </button>
+        </div>
+      ) : null}
+
       <div className="flex items-start gap-4">
         <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-zinc-700/80 bg-zinc-900 md:h-24 md:w-24">
           {profile.avatar_url ? (
@@ -66,7 +103,7 @@ export default function ProfileHeader({ profile, currentSound }: Props) {
           )}
         </div>
 
-        <div className="min-w-0 flex-1 pt-0.5">
+        <div className={`min-w-0 flex-1 pt-0.5 ${isOwnProfile ? 'pr-14 sm:pr-24' : ''}`}>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-bold tracking-tight text-white md:text-2xl">{name}</h1>
             <VerifiedBadge
