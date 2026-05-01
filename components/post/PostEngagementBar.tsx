@@ -1,7 +1,7 @@
 'use client';
 
 import type { Dispatch, SetStateAction } from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageCircle, Share2, Sparkles } from 'lucide-react';
 import { isPostLiftedByCurrentUser, togglePostLift } from '@/lib/api/lifts';
 
@@ -23,6 +23,12 @@ export default function PostEngagementBar({
   const [lifted, setLifted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const pendingRef = useRef(false);
+  const liftedRef = useRef(false);
+
+  useEffect(() => {
+    liftedRef.current = lifted;
+  }, [lifted]);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,20 +41,32 @@ export default function PostEngagementBar({
     };
   }, [postId]);
 
-  const onLift = useCallback(async () => {
-    if (busy) return;
+  const handleLift = useCallback(async () => {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
     setBusy(true);
+
+    const wasLifted = liftedRef.current;
+    const optimisticNext = !wasLifted;
+    setLifted(optimisticNext);
+    liftedRef.current = optimisticNext;
+    onLiftCountChange((c) => Math.max(0, c + (optimisticNext ? 1 : -1)));
+
     try {
-      const { lifted: next } = await togglePostLift(postId);
-      setLifted(next);
-      onLiftCountChange((c) => Math.max(0, c + (next ? 1 : -1)));
+      const { lifted: serverLifted } = await togglePostLift(postId);
+      setLifted(serverLifted);
+      liftedRef.current = serverLifted;
     } catch (e) {
+      setLifted(wasLifted);
+      liftedRef.current = wasLifted;
+      onLiftCountChange((c) => Math.max(0, c + (wasLifted ? 1 : -1)));
       setToast(e instanceof Error ? e.message : 'Could not update lift');
       setTimeout(() => setToast(null), 2500);
     } finally {
+      pendingRef.current = false;
       setBusy(false);
     }
-  }, [busy, postId, onLiftCountChange]);
+  }, [postId, onLiftCountChange]);
 
   const scrollComments = () => {
     document.getElementById('post-comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -87,7 +105,7 @@ export default function PostEngagementBar({
       ) : null}
       <button
         type="button"
-        onClick={() => void onLift()}
+        onClick={() => void handleLift()}
         disabled={busy}
         className={`flex flex-col items-center gap-1 rounded-lg px-4 py-2 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:opacity-50 ${
           lifted ? 'text-violet-300' : 'text-zinc-300 hover:bg-white/5 hover:text-violet-200'

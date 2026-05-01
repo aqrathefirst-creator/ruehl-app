@@ -120,7 +120,15 @@ export default function PostMedia({ post, authorUserId }: Props) {
             <video key={current} src={current} controls className="aspect-video w-full bg-black" playsInline />
           ) : (
             <div className="relative aspect-video w-full">
-              <Image src={current} alt="" fill className="object-contain" unoptimized sizes="(max-width:672px) 100vw, 672px" />
+              <Image
+                src={current}
+                alt=""
+                fill
+                priority={ix === 0}
+                className="object-contain"
+                unoptimized
+                sizes="(max-width:672px) 100vw, 672px"
+              />
             </div>
           )}
           {urls.length > 1 ? (

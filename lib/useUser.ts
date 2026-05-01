@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
+import { isUserPlatformAdmin } from '@/lib/api/userAdmin';
 import { supabase } from '@/lib/supabase';
 
 type UserProfile = {
@@ -17,9 +18,21 @@ export const useUser = () => {
   const [loading, setLoading] = useState(true);
   const [banned, setBanned] = useState(false);
   const [deleted, setDeleted] = useState(false);
+  const [platformAdmin, setPlatformAdmin] = useState(false);
 
   useEffect(() => {
     let mounted = true;
+
+    const clearSignedOutState = () => {
+      setUser(null);
+      setProfile(null);
+      setBanned(false);
+      setDeleted(false);
+      setPlatformAdmin(false);
+      setLoading(false);
+      sessionStorage.removeItem('ruehl:user');
+      sessionStorage.removeItem('ruehl:profile');
+    };
 
     const hydrateFromSession = async (session: Session | null) => {
       const authUser = session?.user ?? null;
@@ -36,20 +49,23 @@ export const useUser = () => {
         setProfile(null);
         setBanned(false);
         setDeleted(false);
+        setPlatformAdmin(false);
         if (mounted) setLoading(false);
         return;
       }
 
-      const [{ data: profileData }, bannedResult, deletedResult] = await Promise.all([
+      const [{ data: profileData }, bannedResult, deletedResult, adminFlag] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', authUser.id).single(),
         supabase.rpc('is_user_banned', { uid: authUser.id }),
         supabase.rpc('is_user_deleted', { uid: authUser.id }),
+        isUserPlatformAdmin(supabase, authUser.id),
       ]);
 
       if (!mounted) return;
 
       setBanned(!bannedResult.error && Boolean(bannedResult.data));
       setDeleted(!deletedResult.error && Boolean(deletedResult.data));
+      setPlatformAdmin(adminFlag);
 
       setProfile(profileData || null);
       if (profileData) {
@@ -84,10 +100,21 @@ export const useUser = () => {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
-      // Includes TOKEN_REFRESHED — re-check ban/deleted after live moderation / token rotation.
-      void hydrateFromSession(session);
+
+      if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        return;
+      }
+
+      if (event === 'SIGNED_OUT') {
+        clearSignedOutState();
+        return;
+      }
+
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        void hydrateFromSession(session);
+      }
     });
 
     return () => {
@@ -102,5 +129,6 @@ export const useUser = () => {
     loading,
     banned,
     deleted,
+    platformAdmin,
   };
 };

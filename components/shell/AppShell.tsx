@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import BannedGate from '@/components/BannedGate';
 import BottomNav from '@/components/BottomNav';
@@ -9,8 +8,6 @@ import NavRail from '@/components/shell/NavRail';
 import { useProfileRailUserId } from '@/components/shell/ProfileRailUserIdProvider';
 import RightRail from '@/components/shell/RightRail';
 import TopBar from '@/components/shell/TopBar';
-import { isUserPlatformAdmin } from '@/lib/api/userAdmin';
-import { supabase } from '@/lib/supabase';
 import { deriveRightRailVariant } from '@/lib/shell/rightRailVariant';
 import { useUser } from '@/lib/useUser';
 
@@ -21,34 +18,9 @@ type Props = {
 function AppShellInner({ children }: Props) {
   const pathname = usePathname() || '';
   const { profileUserId } = useProfileRailUserId();
-  const { user, loading: userLoading, banned, deleted } = useUser();
-  const [showAdmin, setShowAdmin] = useState(false);
+  const { user, loading: userLoading, banned, deleted, platformAdmin: showAdmin } = useUser();
 
   const rightRailVariant = deriveRightRailVariant(pathname);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadAdminFlag() {
-      if (!user?.id) {
-        setShowAdmin(false);
-        return;
-      }
-
-      const show = await isUserPlatformAdmin(supabase, user.id);
-
-      if (cancelled) return;
-
-      /** WEB_DIRECTION §7 — admin UI gate matches `requireAdmin` (platform flag via `is_user_admin` RPC). */
-      setShowAdmin(show);
-    }
-
-    void loadAdminFlag();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
 
   if (userLoading) {
     return <div className="min-h-screen bg-[var(--bg-primary)]" />;
