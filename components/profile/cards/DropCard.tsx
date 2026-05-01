@@ -1,5 +1,5 @@
+import Link from 'next/link';
 import type { ProfileDropRow } from '@/lib/ruehl/queries/profileTabs';
-import AppViewCta from '@/components/profile/cards/AppViewCta';
 
 type Props = { drop: ProfileDropRow };
 
@@ -8,7 +8,11 @@ export default function DropCard({ drop }: Props) {
   const st = String(drop.status || '—');
 
   return (
-    <article className="mb-3 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-3">
+    <Link
+      href={`/drop/${drop.id}`}
+      className="mb-3 block rounded-2xl border border-zinc-800 bg-zinc-950/80 p-3 transition hover:border-zinc-700 hover:bg-zinc-900/40"
+    >
+      <article>
       <p className="text-[10px] font-bold uppercase tracking-wider text-violet-400/80">Drop</p>
       <p className="mt-1 line-clamp-3 text-[14px] font-medium text-white">{cap}</p>
       <p className="mt-2 text-[12px] text-zinc-500">
@@ -17,7 +21,7 @@ export default function DropCard({ drop }: Props) {
           <span className="ml-2">{new Date(drop.scheduled_for).toLocaleString()}</span>
         ) : null}
       </p>
-      <AppViewCta />
-    </article>
+      </article>
+    </Link>
   );
 }

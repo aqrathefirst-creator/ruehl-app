@@ -4,7 +4,17 @@ import { jsonError, jsonOk } from '@/lib/server/responses';
 
 const SIGNED_URL_TTL_SEC = 3600;
 
-const ALLOWED_BUCKETS = new Set(['post-media-private', 'post-voice-private', 'admin-request-attachments']);
+const ALLOWED_BUCKETS = new Set([
+  'post-media-private',
+  'post-voice-private',
+  'admin-request-attachments',
+  /** Drop / echo audio — paths are `{uuid}/…` per native storage layout. */
+  'drop-audio-private',
+  'drop-echoes-private',
+]);
+
+const PATH_UUID_PREFIX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\//i;
 
 /** Buckets where any path is allowed only after `requireAdmin` (defense in depth). */
 const ADMIN_BUCKETS = new Set(['admin-request-attachments']);
@@ -19,6 +29,10 @@ function pathAllowedForUser(bucket: string, path: string, userId: string): boole
 
   if (bucket === 'post-voice-private') {
     return path.startsWith(`${userId}/`) || path.startsWith(`posts/${userId}-`);
+  }
+
+  if (bucket === 'drop-audio-private' || bucket === 'drop-echoes-private') {
+    return PATH_UUID_PREFIX.test(path);
   }
 
   if (ADMIN_BUCKETS.has(bucket)) {

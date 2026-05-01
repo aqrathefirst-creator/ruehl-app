@@ -23,6 +23,8 @@ export type Drop = {
   accountType: AccountType;
   accountSubtype: AccountCategory;
   audioPath: string;
+  /** `public` = CDN/public URL; `private` = signed URL from `drop-audio-private`. */
+  audioVisibility: 'public' | 'private';
   durationSeconds: number;
   caption: string | null;
   scheduledFor: string; // ISO datetime
@@ -53,8 +55,17 @@ export type DropEcho = {
   createdAt: string;
 };
 
-export const DROPS_AUDIO_BUCKET = 'drop-audio';
-export const DROP_ECHOES_BUCKET = 'drop-echoes';
+/** Public storage bucket for Drop master audio (matches native `DROPS_AUDIO_PUBLIC_BUCKET`). */
+export const DROPS_AUDIO_PUBLIC_BUCKET = 'drop-audio';
+/** Private bucket — listeners receive short-lived signed URLs (matches native). */
+export const DROPS_AUDIO_PRIVATE_BUCKET = 'drop-audio-private';
+export const DROP_ECHOES_PUBLIC_BUCKET = 'drop-echoes';
+export const DROP_ECHOES_PRIVATE_BUCKET = 'drop-echoes-private';
+
+/** @deprecated Use {@link DROPS_AUDIO_PUBLIC_BUCKET}. */
+export const DROPS_AUDIO_BUCKET = DROPS_AUDIO_PUBLIC_BUCKET;
+/** @deprecated Use {@link DROP_ECHOES_PUBLIC_BUCKET}. */
+export const DROP_ECHOES_BUCKET = DROP_ECHOES_PUBLIC_BUCKET;
 
 /** Live window length in minutes after `scheduled_for`. */
 export const DROP_LIVE_WINDOW_MINUTES = 30;
