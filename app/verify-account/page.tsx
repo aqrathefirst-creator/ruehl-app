@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import {
@@ -24,7 +24,7 @@ function maskVerificationTarget(value: string, method: PendingVerification['meth
   return `${safeName}@${domain}`;
 }
 
-export default function VerifyAccountPage() {
+function VerifyAccountPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get('next');
@@ -280,5 +280,13 @@ export default function VerifyAccountPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function VerifyAccountPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black" aria-busy />}>
+      <VerifyAccountPageContent />
+    </Suspense>
   );
 }

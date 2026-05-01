@@ -131,18 +131,34 @@ export default function RootLayoutClient({ children }: { children: React.ReactNo
     !STRICT_PUBLIC.has(pathname || '') &&
     !isCreateRoute;
 
+  /**
+   * Always mount `children` so route trees keep a stable presence across auth resolution.
+   * Previously we rendered only a blank div until `authChecked`, which deferred mounting
+   * page/client components until after auth — that transition interacted badly with hook
+   * counts when shell wrapping toggled. Hidden + overlay preserves hooks order.
+   */
   return (
     <>
       <Toaster richColors position="top-center" />
       {!authChecked ? (
-        <div className="min-h-screen bg-[var(--bg-primary)]" />
-      ) : showShell ? (
-        <ClientShellProviders>
-          <AppShell>{children}</AppShell>
-        </ClientShellProviders>
-      ) : (
-        children
-      )}
+        <div
+          className="fixed inset-0 z-[100] bg-[var(--bg-primary)]"
+          aria-busy="true"
+          aria-live="polite"
+        />
+      ) : null}
+      <div
+        className={!authChecked ? 'pointer-events-none hidden' : undefined}
+        aria-hidden={!authChecked}
+      >
+        {showShell ? (
+          <ClientShellProviders>
+            <AppShell>{children}</AppShell>
+          </ClientShellProviders>
+        ) : (
+          children
+        )}
+      </div>
     </>
   );
 }

@@ -22,18 +22,6 @@ function AppShellInner({ children }: Props) {
 
   const rightRailVariant = deriveRightRailVariant(pathname);
 
-  if (userLoading) {
-    return <div className="min-h-screen bg-[var(--bg-primary)]" />;
-  }
-
-  if (user && banned) {
-    return <BannedGate />;
-  }
-
-  if (user && deleted) {
-    return <DeletedGate />;
-  }
-
   const profileHref = user?.id ? `/profile/${user.id}` : '/profile';
 
   const mainPadTop = 'md:pt-14 lg:pt-0';
@@ -41,7 +29,7 @@ function AppShellInner({ children }: Props) {
   const mainMarginRight =
     rightRailVariant !== 'none' ? 'xl:mr-[var(--shell-right-rail)]' : '';
 
-  return (
+  const shellChrome = (
     <div className="min-h-screen overflow-x-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]">
       <NavRail profileHref={profileHref} showAdmin={showAdmin} />
       <TopBar profileHref={profileHref} showAdmin={showAdmin} />
@@ -53,6 +41,16 @@ function AppShellInner({ children }: Props) {
 
       <BottomNav />
     </div>
+  );
+
+  return userLoading ? (
+    <div className="min-h-screen bg-[var(--bg-primary)]" />
+  ) : user && banned ? (
+    <BannedGate />
+  ) : user && deleted ? (
+    <DeletedGate />
+  ) : (
+    shellChrome
   );
 }
 
