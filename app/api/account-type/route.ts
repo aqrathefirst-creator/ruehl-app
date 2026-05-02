@@ -2,6 +2,7 @@ import { requireUser } from '@/lib/server/supabase';
 import { jsonError, jsonOk } from '@/lib/server/responses';
 import type { AccountCategory, AccountType } from '@/lib/ruehl/accountTypes';
 import { isCategoryValidForType } from '@/lib/ruehl/accountTypes';
+import { updateProfileDisplay } from '@/lib/ruehl/mutations/updateProfileDisplay';
 
 type RpcTier = 'PERSONAL' | 'BUSINESS' | 'MEDIA';
 
@@ -54,17 +55,24 @@ export async function POST(request: Request) {
   }
 
   const pickedAt = new Date().toISOString();
-  const { error: updateError } = await auth.supabase
+  const { error: userErr } = await auth.supabase
     .from('users')
     .update({
       account_type: rpcTier,
       account_subtype: accountSubtype,
-      category_picked_at: pickedAt,
     })
     .eq('id', auth.user.id);
 
-  if (updateError) {
-    return jsonError(updateError.message, 400);
+  if (userErr) {
+    return jsonError(userErr.message, 400);
+  }
+
+  const { error: displayErr } = await updateProfileDisplay(auth.supabase, auth.user.id, {
+    category_picked_at: pickedAt,
+  });
+
+  if (displayErr) {
+    return jsonError(displayErr.message, 400);
   }
 
   return jsonOk({ ok: true });

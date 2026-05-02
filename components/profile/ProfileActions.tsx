@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import ContactInfoModal from '@/components/profile/ContactInfoModal';
 import { supabase } from '@/lib/supabase';
 import { useUser } from '@/lib/useUser';
 import type { RuehlProfilePage } from '@/lib/ruehl/queries/profileServer';
@@ -29,6 +30,7 @@ export default function ProfileActions({ profile }: Props) {
   const [tunedIn, setTunedIn] = useState(false);
   const [tuneBusy, setTuneBusy] = useState(false);
   const [blocked, setBlocked] = useState<'none' | 'i_blocked' | 'they_blocked'>('none');
+  const [contactOpen, setContactOpen] = useState(false);
 
   useEffect(() => {
     if (!viewerId || isOwn || !profile.id) {
@@ -106,45 +108,47 @@ export default function ProfileActions({ profile }: Props) {
     }
   }, [viewerId, isOwn, tuneBusy, blocked, tunedIn, profile.id]);
 
-  const handleShareProfile = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    const url = window.location.href;
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      void navigator.share({ url, title: document.title }).catch(() => {
-        void navigator.clipboard.writeText(url).catch(() => undefined);
-      });
-    } else {
-      void navigator.clipboard.writeText(url).catch(() => undefined);
-    }
-  }, []);
-
   const compactOwn =
     'inline-flex cursor-pointer items-center justify-center rounded-full border border-zinc-700 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-50';
 
-  if (isOwn) {
-    return (
-      <div className="flex flex-wrap items-center gap-2 px-4 py-2">
-        <Link href="/edit-profile" className={compactOwn}>
-          Edit profile
-        </Link>
-        <button type="button" onClick={handleShareProfile} className={compactOwn}>
-          Share
-        </button>
-        <button
-          type="button"
-          disabled
-          title="Analytics coming soon"
-          className={`${compactOwn} opacity-50`}
-          aria-disabled="true"
-        >
-          Analytics
-        </button>
-      </div>
-    );
-  }
-
   const btnBase =
     'inline-flex cursor-pointer items-center justify-center rounded-full px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-50';
+
+  const emailTrim = String(profile.contact_email || '').trim();
+  const phoneTrim = String(profile.contact_phone || '').trim();
+  const showContactOther = Boolean(profile.display_contact_info && (emailTrim || phoneTrim));
+
+  const secondaryOutline = `${btnBase} border border-zinc-600 bg-zinc-900 text-white hover:border-violet-500/50 hover:bg-zinc-800`;
+
+  if (isOwn) {
+    return (
+      <>
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2">
+          <Link href="/edit-profile" className={compactOwn}>
+            Edit profile
+          </Link>
+          <button
+            type="button"
+            disabled
+            title="Analytics coming soon"
+            className={`${compactOwn} opacity-50`}
+            aria-disabled="true"
+          >
+            Analytics
+          </button>
+          <button type="button" onClick={() => setContactOpen(true)} className={compactOwn}>
+            Contact
+          </button>
+        </div>
+        <ContactInfoModal
+          open={contactOpen}
+          onClose={() => setContactOpen(false)}
+          contactEmail={profile.contact_email}
+          contactPhone={profile.contact_phone}
+        />
+      </>
+    );
+  }
 
   if (blocked === 'they_blocked' || blocked === 'i_blocked') {
     return (
@@ -158,14 +162,27 @@ export default function ProfileActions({ profile }: Props) {
 
   if (!viewerId) {
     return (
-      <div className="mx-auto flex max-w-2xl flex-wrap gap-2 px-4 py-4">
-        <Link
-          href="/login"
-          className={`${btnBase} bg-[#a855f7] text-white hover:bg-violet-500`}
-        >
-          Sign in to follow
-        </Link>
-      </div>
+      <>
+        <div className="mx-auto flex max-w-2xl flex-wrap gap-2 px-4 py-4">
+          <Link
+            href="/login"
+            className={`${btnBase} bg-[#a855f7] text-white hover:bg-violet-500`}
+          >
+            Sign in to follow
+          </Link>
+          {showContactOther ? (
+            <button type="button" onClick={() => setContactOpen(true)} className={secondaryOutline}>
+              Contact
+            </button>
+          ) : null}
+        </div>
+        <ContactInfoModal
+          open={contactOpen}
+          onClose={() => setContactOpen(false)}
+          contactEmail={profile.contact_email}
+          contactPhone={profile.contact_phone}
+        />
+      </>
     );
   }
 
@@ -173,27 +190,40 @@ export default function ProfileActions({ profile }: Props) {
     followState === 'following' ? 'Following' : followState === 'requested' ? 'Requested' : 'Follow';
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-4 py-2">
-      <button
-        type="button"
-        onClick={() => void onFollow()}
-        disabled={followBusy}
-        className={`${btnBase} ${
-          followState === 'not_following'
-            ? 'bg-[#a855f7] text-white hover:bg-violet-500'
-            : 'border border-zinc-600 bg-transparent text-white hover:border-violet-500/50 hover:bg-white/5'
-        }`}
-      >
-        {followBusy ? '…' : followLabel}
-      </button>
-      <button
-        type="button"
-        onClick={() => void onTune()}
-        disabled={tuneBusy}
-        className={`${btnBase} border border-zinc-600 bg-zinc-900 text-white hover:border-violet-500/50 hover:bg-zinc-800`}
-      >
-        {tuneBusy ? '…' : tunedIn ? 'Tuned in' : 'Tune in'}
-      </button>
-    </div>
+    <>
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2">
+        <button
+          type="button"
+          onClick={() => void onFollow()}
+          disabled={followBusy}
+          className={`${btnBase} ${
+            followState === 'not_following'
+              ? 'bg-[#a855f7] text-white hover:bg-violet-500'
+              : 'border border-zinc-600 bg-transparent text-white hover:border-violet-500/50 hover:bg-white/5'
+          }`}
+        >
+          {followBusy ? '…' : followLabel}
+        </button>
+        <button
+          type="button"
+          onClick={() => void onTune()}
+          disabled={tuneBusy}
+          className={secondaryOutline}
+        >
+          {tuneBusy ? '…' : tunedIn ? 'Tuned in' : 'Tune in'}
+        </button>
+        {showContactOther ? (
+          <button type="button" onClick={() => setContactOpen(true)} className={secondaryOutline}>
+            Contact
+          </button>
+        ) : null}
+      </div>
+      <ContactInfoModal
+        open={contactOpen}
+        onClose={() => setContactOpen(false)}
+        contactEmail={profile.contact_email}
+        contactPhone={profile.contact_phone}
+      />
+    </>
   );
 }

@@ -36,9 +36,9 @@ export default async function UsernameProfilePage({
     <div className="min-h-screen bg-black text-white">
       <div className="mx-auto max-w-2xl pb-16">
         <ProfileHeader profile={profile} isOwnProfile={isOwnProfile} showAdminIcon={showAdminIcon} />
+        <ProfileBioBlock profile={profile} />
         <ProfileStats profile={profile} stats={stats} />
         <ProfileActions profile={profile} />
-        <ProfileBioBlock profile={profile} />
         <ProfileTabs profile={profile} canViewTabs={canViewTabs} />
       </div>
     </div>

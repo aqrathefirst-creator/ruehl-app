@@ -17,7 +17,7 @@ export function profileFullName(p: RuehlProfile): string | null {
   return name.length > 0 ? name : null;
 }
 
-/** Bio body — `profiles.bio` only; independent of `identity_text`. */
+/** Bio body — `public.profiles.bio` only; independent of `identity_text`. */
 export function profileBioBody(p: RuehlProfile): string | null {
   const bio = String(p.bio || '').trim();
   return bio.length > 0 ? bio : null;
@@ -27,4 +27,21 @@ export function profileAccountTypeLabel(p: RuehlProfile): string | null {
   const t = p.account_type;
   if (!t) return null;
   return t === 'personal' ? 'Personal' : t === 'business' ? 'Business' : t === 'media' ? 'Media' : null;
+}
+
+/** Absolute URL for opening the profile website (adds https:// when missing). */
+export function profileWebsiteOpenUrl(raw: string | null | undefined): string | null {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  return `https://${s}`;
+}
+
+/** Display hostname/path without scheme for inline links. */
+export function profileWebsiteDisplayLabel(raw: string | null | undefined): string | null {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  let hostPath = s.replace(/^https?:\/\//i, '');
+  hostPath = hostPath.replace(/\/$/, '');
+  return hostPath.length > 0 ? hostPath : null;
 }

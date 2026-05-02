@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { updateProfileDisplayBrowser } from '@/lib/ruehl/mutations/updateProfileDisplay';
 import { useRouter } from 'next/navigation';
 
 export default function EditProfile() {
@@ -45,15 +46,12 @@ export default function EditProfile() {
     setSaving(true);
     setSaveError(null);
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        full_name: fullName.trim() || null,
-        username,
-        bio,
-        avatar_url: avatarUrl,
-      })
-      .eq('id', user.id);
+    const { error } = await updateProfileDisplayBrowser(user.id, {
+      full_name: fullName.trim() || null,
+      username: username.trim(),
+      bio,
+      avatar_url: avatarUrl || null,
+    });
 
     setSaving(false);
 

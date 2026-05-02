@@ -1,5 +1,6 @@
 import { requireUser } from '@/lib/server/supabase';
 import { jsonError, jsonOk } from '@/lib/server/responses';
+import { type ProfileDisplayUpdate, updateProfileDisplay } from '@/lib/ruehl/mutations/updateProfileDisplay';
 
 type AccountUpdatePayload = {
   username?: string;
@@ -20,7 +21,7 @@ export async function PATCH(request: Request) {
   const body = (await request.json().catch(() => null)) as AccountUpdatePayload | null;
   if (!body) return jsonError('Invalid body', 400);
 
-  const profileUpdates: Record<string, string | null> = {};
+  const profileUpdates: ProfileDisplayUpdate = {};
 
   if (typeof body.username === 'string') {
     const username = sanitizeText(body.username, 24);
@@ -48,10 +49,11 @@ export async function PATCH(request: Request) {
   }
 
   if (Object.keys(profileUpdates).length > 0) {
-    const { error: profileUpdateError } = await auth.supabase
-      .from('profiles')
-      .update(profileUpdates)
-      .eq('id', auth.user.id);
+    const { error: profileUpdateError } = await updateProfileDisplay(
+      auth.supabase,
+      auth.user.id,
+      profileUpdates,
+    );
 
     if (profileUpdateError) return jsonError(profileUpdateError.message, 400);
   }

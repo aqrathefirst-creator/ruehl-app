@@ -26,7 +26,7 @@ function logFeedError(context: string, err: unknown) {
 }
 
 const PROFILE_RAIL_SELECT =
-  'id, username, avatar_url, bio, identity_text, badge_verification_status, is_verified, verified, created_at';
+  'id, username, full_name, avatar_url, bio, identity_text, identity_tone, artist_name, track_name, badge_verification_status, contact_email, contact_phone, website, display_category_label, display_contact_info, category_picked_at, is_verified, verified, created_at';
 
 const USERS_RAIL_ACCOUNT_SELECT = 'id, account_type, account_subtype';
 
@@ -73,24 +73,29 @@ function mapProfileRow(p: Record<string, unknown>): RuehlProfile {
         ? p.verified
         : null;
 
+  const str = (key: keyof typeof p | string) => {
+    const v = p[key as string];
+    if (v == null) return null;
+    const s = String(v);
+    return s.length ? s : null;
+  };
+
   return {
     id: String(p.id ?? ''),
-    username: typeof p.username === 'string' ? p.username : p.username == null ? null : String(p.username),
-    full_name:
-      typeof p.full_name === 'string' ? p.full_name : p.full_name == null ? null : String(p.full_name),
-    avatar_url: typeof p.avatar_url === 'string' ? p.avatar_url : p.avatar_url == null ? null : String(p.avatar_url),
-    bio: typeof p.bio === 'string' ? p.bio : p.bio == null ? null : String(p.bio),
-    identity_text:
-      typeof p.identity_text === 'string' ? p.identity_text : p.identity_text == null ? null : String(p.identity_text),
+    username: str('username'),
+    full_name: str('full_name'),
+    avatar_url: str('avatar_url'),
+    bio: str('bio'),
+    identity_text: str('identity_text'),
     account_type: parseAccountType(p.account_type == null ? null : String(p.account_type)),
     account_subtype: parseAccountSubtype(p.account_subtype == null ? null : String(p.account_subtype)),
     badge_verification_status: parsedBadge ?? (legacyVerified === true ? 'approved' : null),
-    contact_email: null,
-    contact_phone: null,
-    website: null,
-    display_category_label: null,
-    display_contact_info: null,
-    category_picked_at: null,
+    contact_email: str('contact_email'),
+    contact_phone: str('contact_phone'),
+    website: str('website'),
+    display_category_label: typeof p.display_category_label === 'boolean' ? p.display_category_label : null,
+    display_contact_info: typeof p.display_contact_info === 'boolean' ? p.display_contact_info : null,
+    category_picked_at: str('category_picked_at'),
     is_verified: legacyVerified,
     created_at: p.created_at == null ? null : String(p.created_at),
   };

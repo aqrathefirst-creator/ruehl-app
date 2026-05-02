@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Cursor working artifacts
+AUDIT_*.md
+RUEHL_NATIVE_PRODUCT_SPEC.md
+WEB_PARITY_AUDIT.md
+supabase/.temp/

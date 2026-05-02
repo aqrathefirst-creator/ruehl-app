@@ -1,5 +1,3 @@
-'use client';
-
 import type { AccountCategory, AccountType } from '@/lib/ruehl/accountTypes';
 import { getCategoryLabel } from '@/lib/ruehl/accountTypes';
 
@@ -16,10 +14,7 @@ export default function AccountTypeChip({ accountType, accountSubtype, displayCa
   const label = getCategoryLabel(accountSubtype);
 
   return (
-    <span
-      className="inline-flex max-w-full items-center rounded-[var(--radius-pill)] border border-[var(--border-medium)] bg-[var(--bg-secondary)] px-2.5 py-1 text-[12px] font-semibold text-[var(--text-secondary)]"
-      title={label}
-    >
+    <span className="inline-flex max-w-full items-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500" title={label}>
       {label}
     </span>
   );

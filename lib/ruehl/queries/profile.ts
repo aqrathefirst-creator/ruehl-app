@@ -22,13 +22,12 @@ function isUuid(value: string): boolean {
   return UUID_RE.test(value.trim());
 }
 
-/** `account_type` and `account_subtype` live on `public.users`, not `profiles`. */
+/** Display / public profile columns — read only from `public.profiles`. */
 const PROFILE_SELECT =
-  'id, username, full_name, avatar_url, bio, identity_text, badge_verification_status, contact_email, contact_phone, website, display_category_label, display_contact_info, category_picked_at, is_verified, created_at';
+  'id, username, full_name, avatar_url, bio, identity_text, identity_tone, artist_name, track_name, badge_verification_status, contact_email, contact_phone, website, display_category_label, display_contact_info, category_picked_at, is_verified, verified, created_at';
 
-/** Account tier + subtype: SELECT on `public.users` (column grants). */
-const USERS_SELECT =
-  'id, username, avatar_url, bio, identity_text, account_type, account_subtype, website, display_category_label, display_contact_info, category_picked_at, created_at';
+/** Account state on `public.users` — not mirrored for display reads here. */
+const USERS_ACCOUNT_SELECT = 'id, account_type, account_subtype, is_private, banned, deleted_at';
 
 function parseAccountType(raw: string | null): AccountType | null {
   const s = String(raw || '').trim().toLowerCase();
@@ -64,42 +63,43 @@ function parseBadgeVerification(raw: string | null): RuehlProfile['badge_verific
   return parseVerificationStatus(normalized);
 }
 
+function profileStr(row: Record<string, unknown>, key: string): string | null {
+  const v = row[key];
+  if (v == null) return null;
+  const s = String(v);
+  return s.length ? s : null;
+}
+
 export function mapProfileRow(p: Record<string, unknown>, u: Record<string, unknown> | null): RuehlProfile {
   const users = u || {};
-  const pickStr = (key: string) => {
-    const pv = p[key];
-    const uv = users[key];
-    const v = pv !== undefined && pv !== null && String(pv).length > 0 ? pv : uv;
-    return typeof v === 'string' ? v : v == null ? null : String(v);
-  };
-  const pickBool = (key: string) => {
-    const pv = p[key];
-    const uv = users[key];
-    const v = pv !== undefined ? pv : uv;
-    return typeof v === 'boolean' ? v : null;
-  };
+  const at = parseAccountType(users.account_type == null ? null : String(users.account_type));
+  const sub = parseAccountSubtype(users.account_subtype == null ? null : String(users.account_subtype));
 
-  const at = parseAccountType(pickStr('account_type'));
-  const sub = parseAccountSubtype(pickStr('account_subtype'));
+  const legacyVerified =
+    typeof p.is_verified === 'boolean'
+      ? p.is_verified
+      : typeof p.verified === 'boolean'
+        ? p.verified
+        : null;
 
   return {
     id: String(p.id ?? ''),
-    username: pickStr('username'),
-    full_name: pickStr('full_name'),
-    avatar_url: pickStr('avatar_url'),
-    bio: pickStr('bio'),
-    identity_text: pickStr('identity_text'),
+    username: profileStr(p, 'username'),
+    full_name: profileStr(p, 'full_name'),
+    avatar_url: profileStr(p, 'avatar_url'),
+    bio: profileStr(p, 'bio'),
+    identity_text: profileStr(p, 'identity_text'),
     account_type: at,
     account_subtype: sub,
-    badge_verification_status: parseBadgeVerification(pickStr('badge_verification_status')),
-    contact_email: pickStr('contact_email'),
-    contact_phone: pickStr('contact_phone'),
-    website: pickStr('website'),
-    display_category_label: pickBool('display_category_label'),
-    display_contact_info: pickBool('display_contact_info'),
-    category_picked_at: pickStr('category_picked_at'),
-    is_verified: typeof p.is_verified === 'boolean' ? p.is_verified : null,
-    created_at: pickStr('created_at'),
+    badge_verification_status: parseBadgeVerification(profileStr(p, 'badge_verification_status')),
+    contact_email: profileStr(p, 'contact_email'),
+    contact_phone: profileStr(p, 'contact_phone'),
+    website: profileStr(p, 'website'),
+    display_category_label: typeof p.display_category_label === 'boolean' ? p.display_category_label : null,
+    display_contact_info: typeof p.display_contact_info === 'boolean' ? p.display_contact_info : null,
+    category_picked_at: profileStr(p, 'category_picked_at'),
+    is_verified: legacyVerified,
+    created_at: profileStr(p, 'created_at'),
   };
 }
 
@@ -122,27 +122,13 @@ export async function getProfile(
     profileRow = (data as Record<string, unknown>) ?? null;
   } else {
     const normalized = raw.replace(/^@+/, '');
-    const { data: fromUsers, error: e1 } = await client
-      .from('users')
-      .select('id')
+    const { data, error } = await client
+      .from('profiles')
+      .select(PROFILE_SELECT)
       .ilike('username', normalized)
       .maybeSingle();
-    if (e1) throw e1;
-    const uid = (fromUsers as { id?: string } | null)?.id;
-    if (uid) {
-      const { data, error } = await client.from('profiles').select(PROFILE_SELECT).eq('id', uid).maybeSingle();
-      if (error) throw error;
-      profileRow = (data as Record<string, unknown>) ?? null;
-    }
-    if (!profileRow) {
-      const { data, error } = await client
-        .from('profiles')
-        .select(PROFILE_SELECT)
-        .ilike('username', normalized)
-        .maybeSingle();
-      if (error) throw error;
-      profileRow = (data as Record<string, unknown>) ?? null;
-    }
+    if (error) throw error;
+    profileRow = (data as Record<string, unknown>) ?? null;
   }
 
   if (!profileRow?.id) return null;
@@ -150,7 +136,7 @@ export async function getProfile(
   let mergedUsers: Record<string, unknown> | null = null;
   const { data: userRow, error: userErr } = await client
     .from('users')
-    .select(USERS_SELECT)
+    .select(USERS_ACCOUNT_SELECT)
     .eq('id', String(profileRow.id))
     .maybeSingle();
   if (userErr && !isMissingColumnError(userErr)) throw userErr;
@@ -192,7 +178,7 @@ export async function getProfileLenient(userIdOrUsername: string): Promise<Ruehl
   let mergedUsers: Record<string, unknown> | null = null;
   const { data: userRow, error: userErr } = await supabase
     .from('users')
-    .select(USERS_SELECT)
+    .select(USERS_ACCOUNT_SELECT)
     .eq('id', String(row.id))
     .maybeSingle();
   if (userErr && !isMissingColumnError(userErr)) throw userErr;

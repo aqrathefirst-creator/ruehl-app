@@ -11,7 +11,10 @@ import type { VerificationStatus } from './verification';
 
 export type { PostMediaType, PostSoundInput } from './posts';
 
-/** `public.users` + mirrored profile fields — `ProfileScreen` / native migrations (`20260418000003_*`, `20260419000001_*`). */
+/**
+ * Display fields (`username`, `bio`, `avatar_url`, identity/copy, contact, badges, …) come from
+ * `public.profiles`. Account tier fields (`account_type`, `account_subtype`) come from `public.users`.
+ */
 export type RuehlProfile = {
   id: string;
   username: string | null;
