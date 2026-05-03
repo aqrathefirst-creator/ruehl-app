@@ -1,5 +1,6 @@
 import AccountTypeChip from '@/components/profile/AccountTypeChip';
 import type { RuehlProfilePage } from '@/lib/ruehl/queries/profileServer';
+import { renderBioWithMentions } from '@/lib/ruehl/renderBioWithMentions';
 import {
   profileAccountTypeLabel,
   profileBioBody,
@@ -26,7 +27,7 @@ export default function ProfileBioBlock({ profile }: Props) {
           <p
             className={`whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-200 ${websiteHref ? 'mb-0' : ''}`}
           >
-            {bio}
+            {renderBioWithMentions(bio)}
           </p>
         ) : (
           <p className={`text-sm text-zinc-500 ${websiteHref ? 'mb-0' : ''}`}>No bio added yet.</p>
