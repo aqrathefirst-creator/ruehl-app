@@ -105,7 +105,7 @@ export function mapProfileRow(p: Record<string, unknown>, u: Record<string, unkn
 
 /**
  * Resolve profile by UUID or `@username` / `username` string.
- * Returns `null` when not found; throws on transport errors.
+ * Returns `null` when not found or on Supabase read errors (avoid SSR 500).
  */
 export async function getProfile(
   userIdOrUsername: string,
@@ -118,7 +118,17 @@ export async function getProfile(
 
   if (isUuid(raw)) {
     const { data, error } = await client.from('profiles').select(PROFILE_SELECT).eq('id', raw).maybeSingle();
-    if (error) throw error;
+    if (error) {
+      if (typeof console !== 'undefined') {
+        console.warn('[getProfile] supabase error', {
+          lookup: 'id',
+          id: raw,
+          code: (error as { code?: string }).code,
+          message: error.message,
+        });
+      }
+      return null;
+    }
     profileRow = (data as Record<string, unknown>) ?? null;
   } else {
     const normalized = raw.replace(/^@+/, '');
@@ -127,7 +137,16 @@ export async function getProfile(
       .select(PROFILE_SELECT)
       .ilike('username', normalized)
       .maybeSingle();
-    if (error) throw error;
+    if (error) {
+      if (typeof console !== 'undefined') {
+        console.warn('[getProfile] supabase error', {
+          username: normalized,
+          code: (error as { code?: string }).code,
+          message: error.message,
+        });
+      }
+      return null;
+    }
     profileRow = (data as Record<string, unknown>) ?? null;
   }
 
@@ -139,8 +158,15 @@ export async function getProfile(
     .select(USERS_ACCOUNT_SELECT)
     .eq('id', String(profileRow.id))
     .maybeSingle();
-  if (userErr && !isMissingColumnError(userErr)) throw userErr;
-  if (!userErr && userRow) mergedUsers = userRow as Record<string, unknown>;
+  if (userErr && !isMissingColumnError(userErr)) {
+    if (typeof console !== 'undefined') {
+      console.warn('[getProfile] supabase error (users)', {
+        profileId: String(profileRow.id),
+        code: userErr.code,
+        message: userErr.message,
+      });
+    }
+  } else if (!userErr && userRow) mergedUsers = userRow as Record<string, unknown>;
 
   return mapProfileRow(profileRow, mergedUsers);
 }

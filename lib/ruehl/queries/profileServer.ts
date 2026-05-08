@@ -12,11 +12,25 @@ export type RuehlProfilePage = RuehlProfile & {
 };
 
 export async function getViewerUserId(): Promise<string | null> {
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id ?? null;
+  try {
+    const supabase = await createServerSupabase();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+    if (error) {
+      if (typeof console !== 'undefined') {
+        console.warn('[getViewerUserId] auth.getUser', { message: error.message });
+      }
+      return null;
+    }
+    return user?.id ?? null;
+  } catch (e) {
+    if (typeof console !== 'undefined') {
+      console.warn('[getViewerUserId] unexpected', e);
+    }
+    return null;
+  }
 }
 
 export async function getProfileByUsername(username: string): Promise<RuehlProfilePage | null> {
@@ -27,9 +41,23 @@ export async function getProfileByUsername(username: string): Promise<RuehlProfi
   const base = await getProfile(raw, supabase);
   if (!base?.id) return null;
 
-  const { data: privRow } = await supabase.from('users').select('is_private').eq('id', base.id).maybeSingle();
+  const { data: privRow, error: privErr } = await supabase
+    .from('users')
+    .select('is_private')
+    .eq('id', base.id)
+    .maybeSingle();
 
-  const isPrivateAccount = Boolean((privRow as { is_private?: boolean } | null)?.is_private);
+  if (privErr) {
+    if (typeof console !== 'undefined') {
+      console.warn('[getProfileByUsername] supabase error', {
+        profileId: base.id,
+        code: privErr.code,
+        message: privErr.message,
+      });
+    }
+  }
+
+  const isPrivateAccount = privErr ? false : Boolean((privRow as { is_private?: boolean } | null)?.is_private);
 
   return { ...base, isPrivateAccount };
 }
@@ -73,21 +101,69 @@ export async function getProfileStatsRow(profileId: string): Promise<ProfileStat
     countTuneInsForCreator(supabase, profileId),
   ]);
 
-  const postIds = ((postsSampleRes.data || []) as { id: string }[]).map((r) => r.id).filter(Boolean);
+  if (followersRes.error && typeof console !== 'undefined') {
+    console.warn('[getProfileStatsRow] follows (followers)', {
+      profileId,
+      code: followersRes.error.code,
+      message: followersRes.error.message,
+    });
+  }
+  if (followingRes.error && typeof console !== 'undefined') {
+    console.warn('[getProfileStatsRow] follows (following)', {
+      profileId,
+      code: followingRes.error.code,
+      message: followingRes.error.message,
+    });
+  }
+  if (postsCountRes.error && typeof console !== 'undefined') {
+    console.warn('[getProfileStatsRow] posts count', {
+      profileId,
+      code: postsCountRes.error.code,
+      message: postsCountRes.error.message,
+    });
+  }
+  if (postsSampleRes.error && typeof console !== 'undefined') {
+    console.warn('[getProfileStatsRow] posts sample', {
+      profileId,
+      code: postsSampleRes.error.code,
+      message: postsSampleRes.error.message,
+    });
+  }
+  if (dropsRes.error && typeof console !== 'undefined') {
+    console.warn('[getProfileStatsRow] drops', {
+      profileId,
+      code: dropsRes.error.code,
+      message: dropsRes.error.message,
+    });
+  }
+
+  const postIds = postsSampleRes.error
+    ? []
+    : ((postsSampleRes.data || []) as { id: string }[]).map((r) => r.id).filter(Boolean);
   let liftsReceived = 0;
   if (postIds.length > 0) {
     const { count, error } = await supabase
       .from('post_lifts')
       .select('id', { count: 'exact', head: true })
       .in('post_id', postIds);
-    if (!error) liftsReceived = count ?? 0;
+    if (error) {
+      if (typeof console !== 'undefined') {
+        console.warn('[getProfileStatsRow] post_lifts', {
+          profileId,
+          code: error.code,
+          message: error.message,
+        });
+      }
+    } else {
+      liftsReceived = count ?? 0;
+    }
   }
 
   return {
-    posts: postsCountRes.count ?? 0,
+    posts: postsCountRes.error ? 0 : postsCountRes.count ?? 0,
     liftsReceived,
-    followers: followersRes.count ?? 0,
-    following: followingRes.count ?? 0,
+    followers: followersRes.error ? 0 : followersRes.count ?? 0,
+    following: followingRes.error ? 0 : followingRes.count ?? 0,
     drops: dropsRes.error ? 0 : dropsRes.count ?? 0,
     tuneIns,
   };
@@ -150,16 +226,41 @@ export async function getIdentityPagePayload(profileId: string): Promise<Identit
 
 export async function getCanViewPrivateTabs(profileId: string, viewerId: string | null): Promise<boolean> {
   const supabase = await createServerSupabase();
-  const { data: row } = await supabase.from('users').select('is_private').eq('id', profileId).maybeSingle();
+  const { data: row, error: rowErr } = await supabase
+    .from('users')
+    .select('is_private')
+    .eq('id', profileId)
+    .maybeSingle();
+  if (rowErr) {
+    if (typeof console !== 'undefined') {
+      console.warn('[getCanViewPrivateTabs] users', {
+        profileId,
+        code: rowErr.code,
+        message: rowErr.message,
+      });
+    }
+    return false;
+  }
   const isPrivate = Boolean((row as { is_private?: boolean } | null)?.is_private);
   if (!isPrivate) return true;
   if (!viewerId) return false;
   if (viewerId === profileId) return true;
-  const { data: fol } = await supabase
+  const { data: fol, error: folErr } = await supabase
     .from('follows')
     .select('follower_id')
     .eq('follower_id', viewerId)
     .eq('following_id', profileId)
     .maybeSingle();
+  if (folErr) {
+    if (typeof console !== 'undefined') {
+      console.warn('[getCanViewPrivateTabs] follows', {
+        profileId,
+        viewerId,
+        code: folErr.code,
+        message: folErr.message,
+      });
+    }
+    return false;
+  }
   return Boolean(fol);
 }
