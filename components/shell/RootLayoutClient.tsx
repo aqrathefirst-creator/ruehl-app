@@ -23,9 +23,89 @@ function isExplorePath(path: string | null): boolean {
   return p === '/explore' || p.startsWith('/explore/');
 }
 
+const RESERVED_ROOT_SEGMENTS = new Set<string>([
+  // Auth
+  'login',
+  'signup',
+  'signin',
+  'register',
+  'forgot-password',
+  'reset-password',
+  'verify-account',
+  // App routes
+  'admin',
+  'api',
+  '_next',
+  'sessions',
+  'room',
+  'powr',
+  'charts',
+  'onboarding',
+  'saved-sounds',
+  'messages',
+  'notifications',
+  'home',
+  'now',
+  'create',
+  'explore',
+  'settings',
+  'account',
+  'profile',
+  // Shared content (handled separately)
+  'drop',
+  'sound',
+  // Static
+  'favicon.ico',
+  'robots.txt',
+  'sitemap.xml',
+  // Legal / marketing
+  'privacy',
+  'terms',
+  'support',
+  'about',
+  'careers',
+  'jobs',
+  'help',
+  'contact',
+  'press',
+  'blog',
+  // Auth-related
+  'callback',
+  'auth',
+  'oauth',
+]);
+
+function isPublicProfilePath(path: string | null): boolean {
+  if (!path) return false;
+  // Match exactly /something with no further segments (or trailing slash)
+  const m = path.match(/^\/([^/]+)\/?$/);
+  if (!m) return false;
+  const segment = m[1].toLowerCase();
+  if (RESERVED_ROOT_SEGMENTS.has(segment)) return false;
+  // Reject any path with characters that don't look like a username
+  if (!/^[a-zA-Z0-9_.@-]+$/.test(m[1])) return false;
+  return true;
+}
+
+function isPublicDropPath(path: string | null): boolean {
+  if (!path) return false;
+  return /^\/drop\/[^/]+\/?$/.test(path);
+}
+
+function isPublicLegalPath(path: string | null): boolean {
+  if (!path) return false;
+  return path === '/privacy' || path === '/terms' || path === '/support';
+}
+
 function allowsAnonymousVisit(path: string | null): boolean {
   const p = path || '';
-  return p === '/' || STRICT_PUBLIC.has(p) || isExplorePath(p);
+  if (p === '/') return true;
+  if (STRICT_PUBLIC.has(p)) return true;
+  if (isExplorePath(p)) return true;
+  if (isPublicLegalPath(p)) return true;
+  if (isPublicDropPath(p)) return true;
+  if (isPublicProfilePath(p)) return true;
+  return false;
 }
 
 export default function RootLayoutClient({ children }: { children: React.ReactNode }) {
