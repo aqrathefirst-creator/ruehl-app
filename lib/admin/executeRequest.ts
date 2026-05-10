@@ -71,7 +71,10 @@ export async function executeRequest(params: {
   switch (subject) {
     case 'VERIFY_USER': {
       if (!resolvedUserId) throw new Error('Target user not found. Use a valid UUID or username.');
-      const { error } = await admin.from('profiles').update({ is_verified: true, verified: true }).eq('id', resolvedUserId);
+      const { error } = await admin
+        .from('profiles')
+        .update({ is_verified: true, verified: true, badge_verification_status: 'approved' })
+        .eq('id', resolvedUserId);
       if (error) throw new Error(error.message);
       break;
     }

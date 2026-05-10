@@ -90,7 +90,10 @@ export async function PATCH(request: Request) {
   if (error) return jsonError(error.message, 400);
 
   await access.auth.admin.from('users').update({ is_admin: true }).eq('id', id);
-  await access.auth.admin.from('profiles').update({ is_verified: true, verified: true }).eq('id', id);
+  await access.auth.admin
+    .from('profiles')
+    .update({ is_verified: true, verified: true, badge_verification_status: 'approved' })
+    .eq('id', id);
 
   return jsonOk({ success: true });
 }
