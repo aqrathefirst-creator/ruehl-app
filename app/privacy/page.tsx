@@ -4,7 +4,7 @@ export default function PrivacyPage() {
   return (
     <main className="min-h-screen bg-[var(--bg-primary)] text-[var(--foreground)]">
       <div className="mx-auto w-full max-w-3xl px-6 py-12 sm:px-8 sm:py-16">
-        <p className="text-sm text-zinc-500">Last updated: May 7, 2026</p>
+        <p className="text-sm text-zinc-500">Last updated: May 10, 2026</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Ruehl Privacy Policy</h1>
 
         <section className="mt-10 space-y-4">
@@ -149,7 +149,126 @@ export default function PrivacyPage() {
         </section>
 
         <section className="mt-10 space-y-4">
-          <h2 className="text-2xl font-semibold text-white">7. Your rights and choices</h2>
+          <h2 className="text-2xl font-semibold text-white">7. Disappearing messages (personal chats)</h2>
+          <p className="text-zinc-300">
+            When you message another personal-account user, your conversation defaults to ephemeral mode. This means:
+          </p>
+          <p className="text-zinc-300">
+            Messages remain visible to both participants while they are actively in the chat.
+          </p>
+          <p className="text-zinc-300">
+            When you leave a chat (by navigating away, switching apps, or locking your phone), unpinned messages from
+            before you left will no longer appear when you return.
+          </p>
+          <p className="text-zinc-300">
+            Each user&apos;s view tracks independently. If your conversation partner stays in the chat, they will
+            continue to see all messages until they too leave.
+          </p>
+          <p className="text-zinc-300">
+            Messages you pin (see below) remain visible across all returns.
+          </p>
+          <p className="text-zinc-300">
+            Ephemeral messages are stored on our servers for up to 30 days for delivery reliability and operational
+            integrity, after which they are automatically and permanently deleted. We do not retain ephemeral messages
+            indefinitely.
+          </p>
+        </section>
+
+        <section className="mt-10 space-y-4">
+          <h2 className="text-2xl font-semibold text-white">8. Pinned messages</h2>
+          <p className="text-zinc-300">
+            You can pin a message in any chat by tapping and holding on it. Pinned messages remain visible to both you
+            and your conversation partner across leave/return cycles.
+          </p>
+          <p className="text-zinc-300">
+            Either participant in a personal-to-personal chat can pin a message. Pinned messages are not subject to the
+            30-day automatic deletion described above; they remain stored on our servers until manually unpinned by
+            either party. Once unpinned, they follow the standard ephemeral retention rules.
+          </p>
+          <p className="text-zinc-300">
+            Pinning a message in a brand chat (a chat involving a business account) saves it within the conversation
+            but does not change the conversation&apos;s standard retention behavior.
+          </p>
+        </section>
+
+        <section className="mt-10 space-y-4">
+          <h2 className="text-2xl font-semibold text-white">9. Screenshot notifications</h2>
+          <p className="text-zinc-300">
+            When you take a screenshot inside a personal-to-personal chat on Ruehl, we attempt to notify the other
+            participant that a screenshot was taken. This notification appears as both a push notification and an
+            inline indicator in the conversation.
+          </p>
+          <p className="text-zinc-300">
+            Screenshot detection is supported reliably on iOS. On Android, detection depends on your device&apos;s
+            operating system version; on Android 14 and later, detection works without additional permissions, but on
+            earlier Android versions, detection may be limited or unavailable. We do not request additional storage or
+            media access permissions to enable screenshot detection.
+          </p>
+          <p className="text-zinc-300">
+            Screenshot notifications apply only to personal-to-personal chats. They do not apply to brand or business
+            chats. Other forms of capture (using a separate camera, screen recording on certain devices) cannot always
+            be detected, and we encourage you to share content only with people you trust.
+          </p>
+        </section>
+
+        <section className="mt-10 space-y-4">
+          <h2 className="text-2xl font-semibold text-white">10. Brand and business chats</h2>
+          <p className="text-zinc-300">
+            Chats that involve a brand, business, media, or restaurant account use standard retention rules. Messages in
+            these chats are not automatically deleted and remain stored on our servers as part of normal conversation
+            history. The disappearing messages and screenshot notification features described above do not apply.
+          </p>
+          <p className="text-zinc-300">
+            Senders may unsend their own messages in brand chats at any time; unsent messages become invisible to all
+            participants and are filtered from the conversation view, though server records may be retained per the
+            preservation requirements below.
+          </p>
+        </section>
+
+        <section className="mt-10 space-y-4">
+          <h2 className="text-2xl font-semibold text-white">11. Server-side retention and deletion</h2>
+          <p className="text-zinc-300">
+            Our retention practices are designed to balance privacy with operational needs and legal obligations.
+          </p>
+          <p className="text-zinc-300">
+            Ephemeral messages (personal-to-personal): up to 30 days, then permanently deleted.
+          </p>
+          <p className="text-zinc-300">Pinned messages: stored until unpinned by either participant.</p>
+          <p className="text-zinc-300">
+            Brand/business chat messages: retained as part of normal account history.
+          </p>
+          <p className="text-zinc-300">
+            Account-level data and metadata about your messages (for example, participant identifiers, timestamps): may
+            be retained for operational, security, fraud prevention, and analytics purposes per our overall retention
+            policy.
+          </p>
+          <p className="text-zinc-300">
+            When you delete your Ruehl account, your account-associated data is subject to a 30-day grace period, after
+            which it is permanently deleted along with your messages.
+          </p>
+        </section>
+
+        <section className="mt-10 space-y-4">
+          <h2 className="text-2xl font-semibold text-white">12. Preservation for legal process</h2>
+          <p className="text-zinc-300">
+            We may retain otherwise deletable messages and account data when required by law. Specifically, when we
+            receive a valid preservation request from a governmental entity under the U.S. Stored Communications Act
+            (18 U.S.C. 2703(f)), or an equivalent legal instrument in another jurisdiction, we will preserve the
+            requested data for 90 days, extendable for an additional 90 days upon a renewed request.
+          </p>
+          <p className="text-zinc-300">
+            Preserved data is not made available to law enforcement absent a separate, valid legal process (for example,
+            a subpoena, court order, or search warrant) compelling disclosure. We notify users about legal process
+            seeking the disclosure of their records when permitted by law.
+          </p>
+          <p className="text-zinc-300">
+            Preservation holds may apply to messages that would otherwise be deleted under our standard retention
+            windows, including ephemeral and unpinned messages.
+          </p>
+        </section>
+
+        <section className="mt-10 space-y-4">
+          <h2 className="text-2xl font-semibold text-white">13. Your rights and choices</h2>
           <p className="text-zinc-300">
             You can access and update core profile details in the app, including username-adjacent profile information,
             avatar content, and account-facing metadata made editable in settings.
@@ -170,7 +289,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="mt-10 space-y-4">
-          <h2 className="text-2xl font-semibold text-white">8. Children</h2>
+          <h2 className="text-2xl font-semibold text-white">14. Children</h2>
           <p className="text-zinc-300">
             Ruehl is intended for users who are 13 years of age or older. We do not knowingly collect personal
             information from children under 13.
@@ -182,7 +301,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="mt-10 space-y-4">
-          <h2 className="text-2xl font-semibold text-white">9. Teen users (13–17)</h2>
+          <h2 className="text-2xl font-semibold text-white">15. Teen users (13–17)</h2>
           <p className="text-zinc-300">
             Some U.S. states require additional disclosures for teen users. If you are between 13 and 17, your parent
             or guardian may have additional rights related to your account or your personal information under applicable
@@ -195,7 +314,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="mt-10 space-y-4">
-          <h2 className="text-2xl font-semibold text-white">10. Security</h2>
+          <h2 className="text-2xl font-semibold text-white">16. Security</h2>
           <p className="text-zinc-300">
             We use industry-standard safeguards designed to protect your information. These include encrypted
             connections, encrypted password storage, and access controls for internal systems.
@@ -207,7 +326,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="mt-10 space-y-4">
-          <h2 className="text-2xl font-semibold text-white">11. International users</h2>
+          <h2 className="text-2xl font-semibold text-white">17. International users</h2>
           <p className="text-zinc-300">
             Ruehl is operated from the United States. If you access or use the Service from outside the United States,
             you understand that your information may be processed and stored in the United States.
@@ -219,16 +338,20 @@ export default function PrivacyPage() {
         </section>
 
         <section className="mt-10 space-y-4">
-          <h2 className="text-2xl font-semibold text-white">12. Changes to this policy</h2>
+          <h2 className="text-2xl font-semibold text-white">18. Changes to this policy</h2>
           <p className="text-zinc-300">
             We may update this privacy policy from time to time. If a change is material, we will provide notice in the
             app or by email when appropriate.
+          </p>
+          <p className="text-zinc-300">
+            On May 10, 2026, we updated this policy to disclose new chat features, including ephemeral messages, pinned
+            messages, screenshot notifications, server-side retention, and preservation for legal process.
           </p>
           <p className="text-zinc-300">Your continued use of Ruehl after a policy update means you accept the updated policy.</p>
         </section>
 
         <section className="mt-10 space-y-4">
-          <h2 className="text-2xl font-semibold text-white">13. Contact us</h2>
+          <h2 className="text-2xl font-semibold text-white">19. Contact us</h2>
           <p className="text-zinc-300">Etcetera Group LLC</p>
           <p className="text-zinc-300">Wyoming, USA</p>
           <p className="text-zinc-300">
